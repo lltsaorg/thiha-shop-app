@@ -1,36 +1,39 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { ArrowLeft, CreditCard, CheckCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
+import { useState } from "react";
+import { ArrowLeft, CreditCard, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { getSavedPhone, requireSavedPhone } from "@/lib/client-auth";
 
 export default function ChargePage() {
-  const [phoneNumber, setPhoneNumber] = useState("08012345678") // デフォルト電話番号を設定
-  const [chargeAmount, setChargeAmount] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [showProof, setShowProof] = useState(false)
-  const [requestData, setRequestData] = useState<any>(null)
+  const [chargeAmount, setChargeAmount] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showProof, setShowProof] = useState(false);
+  const [requestData, setRequestData] = useState<any>(null);
+  const phoneNumber = getSavedPhone();
 
   const handleChargeRequest = async () => {
     if (!phoneNumber) {
-      setError("電話番号を入力してください")
-      return
+      setError(
+        "電話番号が未設定です。最初の画面でログイン/新規登録してください"
+      );
+      return;
     }
 
     if (!chargeAmount || Number.parseInt(chargeAmount) <= 0) {
-      setError("チャージ金額を正しく入力してください")
-      return
+      setError("チャージ金額を正しく入力してください");
+      return;
     }
 
-    setIsLoading(true)
-    setError("")
+    setIsLoading(true);
+    setError("");
 
     try {
       const response = await fetch("/api/charge-requests", {
@@ -42,9 +45,9 @@ export default function ChargePage() {
           phone: phoneNumber,
           amount: Number.parseInt(chargeAmount),
         }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
       if (result.success) {
         setRequestData({
           phoneLastFour: phoneNumber.slice(-4),
@@ -52,18 +55,18 @@ export default function ChargePage() {
           timestamp: new Date().toLocaleString("ja-JP"),
           status: "pending",
           requestId: result.id,
-        })
-        setShowProof(true)
+        });
+        setShowProof(true);
       } else {
-        setError("リクエストの送信に失敗しました")
+        setError("リクエストの送信に失敗しました");
       }
     } catch (err) {
-      console.error("Charge request failed:", err)
-      setError("リクエストの送信に失敗しました")
+      console.error("Charge request failed:", err);
+      setError("リクエストの送信に失敗しました");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (showProof && requestData) {
     return (
@@ -74,30 +77,49 @@ export default function ChargePage() {
               <div className="mx-auto w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle className="w-8 h-8 text-primary" />
               </div>
-              <CardTitle className="text-xl font-black">チャージリクエスト証明</CardTitle>
+              <CardTitle className="text-xl font-black">
+                チャージリクエスト証明
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-muted p-4 rounded-lg space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">電話番号（下4桁）</span>
-                  <span className="font-semibold">****{requestData.phoneLastFour}</span>
+                  <span className="text-sm text-muted-foreground">
+                    電話番号（下4桁）
+                  </span>
+                  <span className="font-semibold">
+                    ****{requestData.phoneLastFour}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">チャージリクエスト金額</span>
-                  <span className="font-semibold">¥{requestData.amount.toLocaleString()}</span>
+                  <span className="text-sm text-muted-foreground">
+                    チャージリクエスト金額
+                  </span>
+                  <span className="font-semibold">
+                    ¥{requestData.amount.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">ステータス</span>
-                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                  <span className="text-sm text-muted-foreground">
+                    ステータス
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="bg-yellow-100 text-yellow-800"
+                  >
                     承認待ち（pending）
                   </Badge>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">リクエスト日時</span>
+                  <span className="text-sm text-muted-foreground">
+                    リクエスト日時
+                  </span>
                   <span className="text-sm">{requestData.timestamp}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">リクエストID</span>
+                  <span className="text-sm text-muted-foreground">
+                    リクエストID
+                  </span>
                   <span className="font-semibold">{requestData.requestId}</span>
                 </div>
               </div>
@@ -115,10 +137,10 @@ export default function ChargePage() {
           </Card>
         </div>
       </div>
-    )
+    );
   }
 
-  const quickAmounts = [500, 1000, 2000, 3000]
+  const quickAmounts = [500, 1000, 2000, 3000];
 
   return (
     <div className="min-h-screen bg-background">
@@ -138,9 +160,11 @@ export default function ChargePage() {
       <main className="max-w-md mx-auto px-4 py-6">
         <div className="space-y-6">
           {/* Phone Number Input */}
-          <Card>
+          {/* <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">電話番号入力</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                電話番号入力
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div>
@@ -155,12 +179,14 @@ export default function ChargePage() {
                 />
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Charge Amount */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base font-semibold">チャージ金額</CardTitle>
+              <CardTitle className="text-base font-semibold">
+                チャージ金額
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -176,7 +202,9 @@ export default function ChargePage() {
               </div>
 
               <div>
-                <Label className="text-sm text-muted-foreground mb-2 block">よく使う金額</Label>
+                <Label className="text-sm text-muted-foreground mb-2 block">
+                  よく使う金額
+                </Label>
                 <div className="grid grid-cols-2 gap-2">
                   {quickAmounts.map((amount) => (
                     <Button
@@ -225,5 +253,5 @@ export default function ChargePage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

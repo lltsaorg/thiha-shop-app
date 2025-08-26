@@ -1,140 +1,169 @@
-"use client"
+"use client";
 
-import { ShoppingCart, Wallet, CreditCard, Plus, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useState, useEffect } from "react"
-import Link from "next/link"
+import { ShoppingCart, Wallet, CreditCard, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState, useEffect, SetStateAction, useRef } from "react";
+import Link from "next/link";
+import LoginRegisterGate from "@/components/ui/login-register-gate";
+import { getSavedPhone } from "@/lib/client-auth";
+import { openAuthGate } from "@/lib/auth-gate";
 
 export default function PurchasePage() {
-  const [products, setProducts] = useState<Array<{ id: number; name: string; price: number }>>([])
-  const [selectedProducts, setSelectedProducts] = useState<Array<{ id: string; productId: number | null }>>([
-    { id: "1", productId: null },
-  ])
-  const [balance, setBalance] = useState(0)
-  const [showReceipt, setShowReceipt] = useState(false)
-  const [purchaseData, setPurchaseData] = useState<any>(null)
-  const [userPhone] = useState("08012345678") // In real app, this would come from auth
+  const [products, setProducts] = useState<
+    Array<{ id: number; name: string; price: number }>
+  >([]);
+  const [selectedProducts, setSelectedProducts] = useState<
+    Array<{ id: string; productId: number | null }>
+  >([{ id: "1", productId: null }]);
+  const [balance, setBalance] = useState(0);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [purchaseData, setPurchaseData] = useState<any>(null);
+  const [phone, setPhone] = useState<string | null>(null);
 
+  // const phoneToUse = phone ?? getSavedPhone();
+  // if (!phoneToUse) {
+  //   openAuthGate(
+  //     "電話番号が未入力です。ログインまたは新規登録をしてください。",
+  //     "home"
+  //   );
+  //   return;
+  // }
+
+  const [hasPhone, setHasPhone] = useState(false);
   useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const response = await fetch("/api/products")
-        const data = await response.json()
-        setProducts(data.map((p: any) => ({ id: p.product_id, name: p.name, price: p.price })))
-      } catch (error) {
-        console.error("Failed to load products:", error)
-      }
-    }
-    loadProducts()
-  }, [])
+    // クライアントだけで localStorage を読む
+    const saved = getSavedPhone();
+    setHasPhone(!!saved);
+    // 未設定なら最初画面モーダルを開くだけ（レンダーは止めない）
+    if (!saved) openAuthGate(undefined, "home");
+  }, []);
 
+  // ★ StrictMode二重実行を防ぐ
+  const didLoadProducts = useRef(false);
   useEffect(() => {
-    const loadBalance = async () => {
-      try {
-        const response = await fetch(`/api/balance?phone=${userPhone}`)
-        const data = await response.json()
-        setBalance(data.balance)
-      } catch (error) {
-        console.error("Failed to load balance:", error)
-      }
-    }
-
-    loadBalance()
-    const interval = setInterval(loadBalance, 2000)
-    return () => clearInterval(interval)
-  }, [userPhone])
+    if (didLoadProducts.current) return;
+    didLoadProducts.current = true;
+    (async () => {
+      const res = await fetch("/api/products", { cache: "no-store" });
+      const data = await res.json();
+      const list = Array.isArray(data?.items) ? data.items : data;
+      setProducts(
+        list.map((p: any) => ({
+          id: p.product_id ?? p.id,
+          name: p.name,
+          price: p.price,
+        }))
+      );
+    })();
+  }, []);
 
   const addProductDropdown = () => {
-    const newId = Date.now().toString()
-    setSelectedProducts((prev) => [...prev, { id: newId, productId: null }])
-  }
+    const newId = Date.now().toString();
+    setSelectedProducts((prev) => [...prev, { id: newId, productId: null }]);
+  };
 
   const removeProductDropdown = (id: string) => {
     if (selectedProducts.length > 1) {
-      setSelectedProducts((prev) => prev.filter((item) => item.id !== id))
+      setSelectedProducts((prev) => prev.filter((item) => item.id !== id));
     }
-  }
+  };
 
   const updateSelectedProduct = (id: string, productId: number | null) => {
-    setSelectedProducts((prev) => prev.map((item) => (item.id === id ? { ...item, productId } : item)))
-  }
+    setSelectedProducts((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, productId } : item))
+    );
+  };
 
   const getTotalPrice = () => {
     return selectedProducts.reduce((total, item) => {
       if (item.productId) {
-        const product = products.find((p) => p.id === item.productId)
-        return total + (product ? product.price : 0)
+        const product = products.find((p) => p.id === item.productId);
+        return total + (product ? product.price : 0);
       }
-      return total
-    }, 0)
-  }
+      return total;
+    }, 0);
+  };
 
   const getSelectedProductsList = () => {
-    const productCounts: { [key: number]: number } = {}
+    const productCounts: { [key: number]: number } = {};
 
     selectedProducts.forEach((item) => {
       if (item.productId) {
-        productCounts[item.productId] = (productCounts[item.productId] || 0) + 1
+        productCounts[item.productId] =
+          (productCounts[item.productId] || 0) + 1;
       }
-    })
+    });
 
     return Object.entries(productCounts)
       .map(([productId, quantity]) => {
-        const product = products.find((p) => p.id === Number(productId))
-        return { ...product, quantity }
+        const product = products.find((p) => p.id === Number(productId));
+        return { ...product, quantity };
       })
-      .filter((item) => item.quantity > 0)
-  }
+      .filter((item) => item.quantity > 0);
+  };
 
   const handlePurchase = async () => {
-    const selectedList = getSelectedProductsList()
-    const totalPrice = getTotalPrice()
+    const selectedList = getSelectedProductsList();
+    const totalPrice = getTotalPrice();
 
     if (selectedList.length === 0) {
-      alert("商品を選択してください")
-      return
+      alert("商品を選択してください");
+      return;
     }
 
     if (balance < totalPrice) {
-      alert("残高が不足しています")
-      return
+      alert("残高が不足しています");
+      return;
     }
 
     try {
+      if (!phone) {
+        openAuthGate(
+          "電話番号が未入力です。ログインまたは新規登録をしてください。",
+          "home"
+        );
+        return;
+      }
+
       const response = await fetch("/api/purchase", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: userPhone,
-          products: selectedList,
-          totalPrice,
+          phone: phone,
+          items: selectedList.map((it: any) => ({
+            product_id: String(it.id),
+            qty: Number(it.quantity),
+            price: Number(it.price),
+            total: Number(it.price) * Number(it.quantity),
+          })),
         }),
-      })
-
-      const result = await response.json()
-      if (result.success) {
-        setBalance(result.newBalance)
-        setPurchaseData({
-          products: selectedList,
-          totalPrice,
-          timestamp: new Date().toLocaleString("ja-JP"),
-          remainingBalance: result.newBalance,
-        })
-        setShowReceipt(true)
-        setSelectedProducts([{ id: "1", productId: null }])
+      });
+      const result = await response.json();
+      if (response.ok) {
+        const newBal = Number(
+          result.balance_after ?? balance - getTotalPrice()
+        );
+        setBalance(newBal);
+        // 以降は既存のレシート表示処理そのまま
       } else {
-        alert("購入に失敗しました")
+        alert(
+          result?.error ? JSON.stringify(result.error) : "購入に失敗しました"
+        );
       }
     } catch (error) {
-      console.error("Purchase failed:", error)
-      alert("購入に失敗しました")
+      console.error("Purchase failed:", error);
+      alert("購入に失敗しました");
     }
-  }
+  };
 
   if (showReceipt && purchaseData) {
     return (
@@ -154,22 +183,32 @@ export default function PurchasePage() {
                     <span className="text-sm">
                       {item.name} × {item.quantity}
                     </span>
-                    <span className="font-semibold">¥{(item.price * item.quantity).toLocaleString()}</span>
+                    <span className="font-semibold">
+                      ¥{(item.price * item.quantity).toLocaleString()}
+                    </span>
                   </div>
                 ))}
                 <div className="border-t pt-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">合計金額</span>
-                    <span className="font-bold text-lg">¥{purchaseData.totalPrice.toLocaleString()}</span>
+                    <span className="text-sm text-muted-foreground">
+                      合計金額
+                    </span>
+                    <span className="font-bold text-lg">
+                      ¥{purchaseData.totalPrice.toLocaleString()}
+                    </span>
                   </div>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">購入日時</span>
+                  <span className="text-sm text-muted-foreground">
+                    購入日時
+                  </span>
                   <span className="text-sm">{purchaseData.timestamp}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
                   <span className="text-sm text-muted-foreground">残高</span>
-                  <span className="font-semibold text-primary">¥{purchaseData.remainingBalance.toLocaleString()}</span>
+                  <span className="font-semibold text-primary">
+                    ¥{purchaseData.remainingBalance.toLocaleString()}
+                  </span>
                 </div>
               </div>
 
@@ -179,7 +218,7 @@ export default function PurchasePage() {
 
               <Button
                 onClick={() => {
-                  setShowReceipt(false)
+                  setShowReceipt(false);
                 }}
                 className="w-full h-12"
               >
@@ -189,113 +228,134 @@ export default function PurchasePage() {
           </Card>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-card border-b border-border">
-        <div className="max-w-md mx-auto px-4 py-4">
-          <h1 className="text-xl font-black text-center">商品購入</h1>
-        </div>
-      </header>
-
-      <main className="max-w-md mx-auto px-4 py-6">
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Wallet className="w-5 h-5 text-primary mr-2" />
-                  <span className="font-semibold">現在の残高</span>
-                </div>
-                <Badge variant="secondary" className="text-lg font-bold px-3 py-1 bg-primary/10 text-primary">
-                  ¥{balance.toLocaleString()}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="mb-8">
-            <Link href="/charge">
-              <Button
-                variant="outline"
-                className="w-full h-12 bg-transparent border-primary text-primary hover:bg-primary/10"
-              >
-                <CreditCard className="w-5 h-5 mr-2" />
-                残高をチャージする
-              </Button>
-            </Link>
+    <>
+      <LoginRegisterGate
+        onAuthed={(p, b) => {
+          setPhone(p);
+          setBalance(b); // ログイン時の残高
+        }}
+      />
+      <div className="min-h-screen bg-background">
+        <header className="bg-card border-b border-border">
+          <div className="max-w-md mx-auto px-4 py-4">
+            <h1 className="text-xl font-black text-center">商品購入</h1>
           </div>
+        </header>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">商品を選択</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                {selectedProducts.map((item, index) => (
-                  <div key={item.id} className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <Select
-                        value={item.productId?.toString() || ""}
-                        onValueChange={(value) => updateSelectedProduct(item.id, value ? Number(value) : null)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="商品を選択してください" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem key={product.id} value={product.id.toString()}>
-                              {product.name} - ¥{product.price}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {selectedProducts.length > 1 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeProductDropdown(item.id)}
-                        className="h-10 w-10 p-0 text-destructive hover:text-destructive"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+        <main className="max-w-md mx-auto px-4 py-6">
+          <div className="space-y-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Wallet className="w-5 h-5 text-primary mr-2" />
+                    <span className="font-semibold">現在の残高</span>
                   </div>
-                ))}
+                  <Badge
+                    variant="secondary"
+                    className="text-lg font-bold px-3 py-1 bg-primary/10 text-primary"
+                  >
+                    ¥{balance.toLocaleString()}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
 
+            <div className="mb-8">
+              <Link href="/charge">
                 <Button
                   variant="outline"
-                  onClick={addProductDropdown}
-                  className="w-full h-10 border-dashed border-primary text-primary hover:bg-primary/10 bg-transparent"
+                  className="w-full h-12 bg-transparent border-primary text-primary hover:bg-primary/10"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  商品を追加
+                  <CreditCard className="w-5 h-5 mr-2" />
+                  残高をチャージする
                 </Button>
-              </div>
+              </Link>
+            </div>
 
-              {getTotalPrice() > 0 && (
-                <div className="bg-primary/10 p-3 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold">合計金額</span>
-                    <span className="text-lg font-bold text-primary">¥{getTotalPrice().toLocaleString()}</span>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">商品を選択</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  {selectedProducts.map((item, index) => (
+                    <div key={item.id} className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <Select
+                          value={item.productId?.toString() || ""}
+                          onValueChange={(value) =>
+                            updateSelectedProduct(
+                              item.id,
+                              value ? Number(value) : null
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="商品を選択してください" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem
+                                key={product.id}
+                                value={product.id.toString()}
+                              >
+                                {product.name} - ¥{product.price}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {selectedProducts.length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeProductDropdown(item.id)}
+                          className="h-10 w-10 p-0 text-destructive hover:text-destructive"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+
+                  <Button
+                    variant="outline"
+                    onClick={addProductDropdown}
+                    className="w-full h-10 border-dashed border-primary text-primary hover:bg-primary/10 bg-transparent"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    商品を追加
+                  </Button>
                 </div>
-              )}
 
-              <Button
-                onClick={handlePurchase}
-                disabled={getTotalPrice() === 0}
-                className="w-full h-12 text-lg font-semibold"
-              >
-                購入する
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    </div>
-  )
+                {getTotalPrice() > 0 && (
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold">合計金額</span>
+                      <span className="text-lg font-bold text-primary">
+                        ¥{getTotalPrice().toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handlePurchase}
+                  disabled={getTotalPrice() === 0}
+                  className="w-full h-12 text-lg font-semibold"
+                >
+                  購入する
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </>
+  );
 }

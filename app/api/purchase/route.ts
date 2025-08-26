@@ -1,63 +1,58 @@
-import { NextResponse } from "next/server"
+// /app/api/purchase/route.ts
 import {
-  getBalance,
-  updateBalance,
-  addTransaction,
-  getProducts,
-} from "@/lib/sheets"
+  TAB,
+  findUserRowByPhoneNumber,
+  appendRow,
+  updateRange,
+  a1,
+  invalidateBalanceCache,
+} from "@/lib/sheets";
+import { PurchaseSchema } from "@/lib/validators";
+import { json, nowISO } from "@/lib/utils";
+export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
-  try {
-    const { phone, products } = await request.json()
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = PurchaseSchema.safeParse(body);
+  if (!parsed.success) return json({ error: parsed.error.format() }, 400);
 
-    const productDefs = await getProducts()
-    const productMap = new Map(productDefs.map((p) => [p.product_id, p]))
+  const { phone, items } = parsed.data;
 
-    let total = 0
-    for (const { productId, qty } of products) {
-      const def = productMap.get(productId)
-      if (!def) {
-        return NextResponse.json(
-          { error: `Unknown product: ${productId}` },
-          { status: 400 },
-        )
-      }
-      if (!def.active) {
-        return NextResponse.json(
-          { error: `Inactive product: ${productId}` },
-          { status: 400 },
-        )
-      }
-      total += def.price * qty
-    }
+  // ユーザーが存在しない場合は購入を拒否
+  const u = await findUserRowByPhoneNumber(phone);
+  if (!u) return json({ error: "unknown phone_number" }, 400);
 
-    // Check balance
-    const currentBalance = await getBalance(phone)
-    if (currentBalance < total) {
-      return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
-    }
+  const current = Number(u.row[u.header.get("balance")!] ?? 0);
 
-    // Update balance
-    const newBalance = currentBalance - total
-    await updateBalance(phone, newBalance)
+  // フロント計算を採用 → quantity/total_amount に正規化
+  const normalized = items.map((it) => ({
+    product_id: it.product_id,
+    quantity: (it.quantity ?? it.qty)!,
+    total_amount: (it.total_amount ?? it.total)!,
+  }));
 
-    // Add transaction records
-    for (const { productId, qty } of products) {
-      const def = productMap.get(productId)!
-      await addTransaction({
-        type: "purchase",
-        phone,
-        product_id: productId,
-        qty,
-        price: def.price,
-        total: def.price * qty,
-        note: `Purchase: ${def.name}`,
-      })
-    }
-
-    return NextResponse.json({ success: true, newBalance, total })
-  } catch (error) {
-    console.error("Error processing purchase:", error)
-    return NextResponse.json({ error: "Failed to process purchase" }, { status: 500 })
+  // Transactions に [timestamp, phone_number, product_id, quantity, total_amount]
+  for (const it of normalized) {
+    await appendRow(TAB.TX, [
+      nowISO(),
+      phone,
+      it.product_id,
+      it.quantity,
+      it.total_amount,
+    ]);
   }
+
+  const grand = normalized.reduce(
+    (s, it) => s + Number(it.total_amount || 0),
+    0
+  );
+  const after = current - grand;
+
+  // Users.balance 更新
+  const balIdx = u.header.get("balance")!;
+  u.row[balIdx] = after;
+  await updateRange(a1(TAB.USERS, `A${u.rowIndex}:Z${u.rowIndex}`), [u.row]);
+
+  invalidateBalanceCache(phone);
+  return json({ ok: true, total: grand, balance_after: after });
 }

@@ -1,52 +1,21 @@
-import { NextResponse } from "next/server"
-import { getChargeRequests, addChargeRequest, approveChargeRequest, getBalance } from "@/lib/sheets"
-import { assertAdminAuth, UnauthorizedError } from "@/lib/auth"
+import { TAB, appendRow } from "@/lib/sheets";
+import { ChargeRequestSchema } from "@/lib/validators";
+import { json, nowISO } from "@/lib/utils";
+import { notifyAdmins, isPushReady } from "@/lib/push";
+export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  try {
-    assertAdminAuth(request)
-    const requests = await getChargeRequests()
+const uid = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2);
 
-    // Add current balance for each phone number
-    const requestsWithBalance = await Promise.all(
-      requests.map(async (request) => {
-        const balance = await getBalance(request.phone)
-        return { ...request, currentBalance: balance }
-      }),
-    )
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = ChargeRequestSchema.safeParse(body);
+  if (!parsed.success) return json({ error: parsed.error.format() }, 400);
+  const { phone, amount } = parsed.data;
 
-    return NextResponse.json(requestsWithBalance)
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    console.error("Error fetching charge requests:", error)
-    return NextResponse.json({ error: "Failed to fetch charge requests" }, { status: 500 })
+  const id = uid();
+  await appendRow(TAB.CHARGE_REQ, [id, phone, amount, "false", nowISO(), ""]);
+  if (isPushReady()) {
+    await notifyAdmins("Charge Request", `phone: ${phone}, amount: ${amount}`);
   }
-}
-
-export async function POST(request: Request) {
-  try {
-    const { phone, amount } = await request.json()
-    const id = await addChargeRequest(phone, amount)
-    return NextResponse.json({ success: true, id })
-  } catch (error) {
-    console.error("Error creating charge request:", error)
-    return NextResponse.json({ error: "Failed to create charge request" }, { status: 500 })
-  }
-}
-
-export async function PUT(request: Request) {
-  try {
-    assertAdminAuth(request)
-    const { id } = await request.json()
-    await approveChargeRequest(id)
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    console.error("Error approving charge request:", error)
-    return NextResponse.json({ error: "Failed to approve charge request" }, { status: 500 })
-  }
+  return json({ ok: true, id });
 }

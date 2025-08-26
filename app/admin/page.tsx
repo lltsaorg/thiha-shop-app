@@ -1,51 +1,72 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { CreditCard, Package, BarChart3, Check, Edit, Trash2, Plus, Search } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useState, useEffect } from "react";
+import {
+  CreditCard,
+  Package,
+  BarChart3,
+  Check,
+  Edit,
+  Trash2,
+  Plus,
+  Search,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState("charge")
-  const [requests, setRequests] = useState<any[]>([])
-  const [products, setProducts] = useState<any[]>([])
-  const [notification, setNotification] = useState("")
-  const [editingProduct, setEditingProduct] = useState<any>(null)
-  const [newProduct, setNewProduct] = useState({ name: "", price: "" })
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState("charge");
+  const [requests, setRequests] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [notification, setNotification] = useState("");
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [newProduct, setNewProduct] = useState({ name: "", price: "" });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         // Load charge requests
-        const requestsResponse = await fetch("/api/charge-requests")
-        const requestsData = await requestsResponse.json()
-        setRequests(requestsData)
+        const requestsResponse = await fetch("/api/charge-requests");
+        const requestsData = await requestsResponse.json();
+        setRequests(requestsData);
 
         // Load products
-        const productsResponse = await fetch("/api/products")
-        const productsData = await productsResponse.json()
-        setProducts(productsData.map((p: any) => ({ id: p.product_id, name: p.name, price: p.price })))
+        const productsResponse = await fetch("/api/products");
+        const productsData = await productsResponse.json();
+        setProducts(
+          productsData.map((p: any) => ({
+            id: p.product_id,
+            name: p.name,
+            price: p.price,
+          }))
+        );
       } catch (error) {
-        console.error("Failed to load data:", error)
+        console.error("Failed to load data:", error);
       }
-    }
+    };
 
-    loadData()
+    loadData();
     // Refresh data every 5 seconds
-    const interval = setInterval(loadData, 5000)
-    return () => clearInterval(interval)
-  }, [])
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleApprove = async (requestId: string) => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
       const response = await fetch("/api/charge-requests", {
         method: "PUT",
@@ -53,25 +74,29 @@ export default function AdminPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ id: requestId }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
       if (result.success) {
-        setRequests((prev) => prev.map((req) => (req.id === requestId ? { ...req, approved: true } : req)))
-        setNotification("チャージリクエストを承認しました")
-        setTimeout(() => setNotification(""), 3000)
+        setRequests((prev) =>
+          prev.map((req) =>
+            req.id === requestId ? { ...req, approved: true } : req
+          )
+        );
+        setNotification("チャージリクエストを承認しました");
+        setTimeout(() => setNotification(""), 3000);
       } else {
-        setNotification("承認に失敗しました")
-        setTimeout(() => setNotification(""), 3000)
+        setNotification("承認に失敗しました");
+        setTimeout(() => setNotification(""), 3000);
       }
     } catch (error) {
-      console.error("Approval failed:", error)
-      setNotification("承認に失敗しました")
-      setTimeout(() => setNotification(""), 3000)
+      console.error("Approval failed:", error);
+      setNotification("承認に失敗しました");
+      setTimeout(() => setNotification(""), 3000);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleEditProduct = async (product: any) => {
     try {
@@ -85,29 +110,31 @@ export default function AdminPage() {
           name: product.name,
           price: product.price,
         }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
       if (result.success) {
-        setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)))
-        setEditingProduct(null)
-        setNotification("商品を更新しました")
-        setTimeout(() => setNotification(""), 3000)
+        setProducts((prev) =>
+          prev.map((p) => (p.id === product.id ? product : p))
+        );
+        setEditingProduct(null);
+        setNotification("商品を更新しました");
+        setTimeout(() => setNotification(""), 3000);
       }
     } catch (error) {
-      console.error("Product update failed:", error)
-      setNotification("商品の更新に失敗しました")
-      setTimeout(() => setNotification(""), 3000)
+      console.error("Product update failed:", error);
+      setNotification("商品の更新に失敗しました");
+      setTimeout(() => setNotification(""), 3000);
     }
-  }
+  };
 
   const handleDeleteProduct = (productId: number) => {
-    setNotification("商品の削除は手動で行ってください")
-    setTimeout(() => setNotification(""), 3000)
-  }
+    setNotification("商品の削除は手動で行ってください");
+    setTimeout(() => setNotification(""), 3000);
+  };
 
   const handleAddProduct = async () => {
-    if (!newProduct.name || !newProduct.price) return
+    if (!newProduct.name || !newProduct.price) return;
 
     try {
       const response = await fetch("/api/products", {
@@ -119,30 +146,38 @@ export default function AdminPage() {
           name: newProduct.name,
           price: Number(newProduct.price),
         }),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
       if (result.success) {
         // Reload products
-        const productsResponse = await fetch("/api/products")
-        const productsData = await productsResponse.json()
-        setProducts(productsData.map((p: any) => ({ id: p.product_id, name: p.name, price: p.price })))
+        const productsResponse = await fetch("/api/products");
+        const productsData = await productsResponse.json();
+        setProducts(
+          productsData.map((p: any) => ({
+            id: p.product_id,
+            name: p.name,
+            price: p.price,
+          }))
+        );
 
-        setNewProduct({ name: "", price: "" })
-        setNotification("商品を追加しました")
-        setTimeout(() => setNotification(""), 3000)
+        setNewProduct({ name: "", price: "" });
+        setNotification("商品を追加しました");
+        setTimeout(() => setNotification(""), 3000);
       }
     } catch (error) {
-      console.error("Product addition failed:", error)
-      setNotification("商品の追加に失敗しました")
-      setTimeout(() => setNotification(""), 3000)
+      console.error("Product addition failed:", error);
+      setNotification("商品の追加に失敗しました");
+      setTimeout(() => setNotification(""), 3000);
     }
-  }
+  };
 
-  const filteredProducts = products.filter((product) => product.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const pendingRequests = requests.filter((req) => !req.approved)
-  const processedRequests = requests.filter((req) => req.approved)
+  const pendingRequests = requests.filter((req) => !req.approved);
+  const processedRequests = requests.filter((req) => req.approved);
 
   return (
     <div className="min-h-screen bg-background">
@@ -157,7 +192,9 @@ export default function AdminPage() {
       <main className="max-w-4xl mx-auto px-4 py-6">
         {notification && (
           <Alert className="mb-6 border-primary bg-primary/5">
-            <AlertDescription className="text-primary">{notification}</AlertDescription>
+            <AlertDescription className="text-primary">
+              {notification}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -192,35 +229,53 @@ export default function AdminPage() {
         {activeTab === "charge" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-black">チャージリクエスト管理</CardTitle>
+              <CardTitle className="text-lg font-black">
+                チャージリクエスト管理
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="pending" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="pending">承認待ち ({pendingRequests.length})</TabsTrigger>
+                  <TabsTrigger value="pending">
+                    承認待ち ({pendingRequests.length})
+                  </TabsTrigger>
                   <TabsTrigger value="processed">処理済み</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="pending" className="space-y-4 mt-6">
                   {pendingRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">承認待ちのリクエストはありません</div>
+                    <div className="text-center py-8 text-muted-foreground">
+                      承認待ちのリクエストはありません
+                    </div>
                   ) : (
                     pendingRequests.map((request) => (
-                      <Card key={request.id} className="border-2 border-primary/20">
+                      <Card
+                        key={request.id}
+                        className="border-2 border-primary/20"
+                      >
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold">{request.phone}</span>
-                                <Badge variant="secondary" className="bg-primary/10 text-primary">
+                                <span className="font-semibold">
+                                  {request.phone}
+                                </span>
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-primary/10 text-primary"
+                                >
                                   承認待ち
                                 </Badge>
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                チャージ額: ¥{request.amount.toLocaleString()} | 現在残高: ¥
-                                {request.currentBalance?.toLocaleString() || "0"}
+                                チャージ額: ¥{request.amount.toLocaleString()} |
+                                現在残高: ¥
+                                {request.currentBalance?.toLocaleString() ||
+                                  "0"}
                               </div>
-                              <div className="text-xs text-muted-foreground">{request.requested_at}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {request.requested_at}
+                              </div>
                             </div>
                             <Button
                               onClick={() => handleApprove(request.id)}
@@ -240,7 +295,9 @@ export default function AdminPage() {
 
                 <TabsContent value="processed" className="space-y-4 mt-6">
                   {processedRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">処理済みのリクエストはありません</div>
+                    <div className="text-center py-8 text-muted-foreground">
+                      処理済みのリクエストはありません
+                    </div>
                   ) : (
                     processedRequests.map((request) => (
                       <Card key={request.id}>
@@ -248,17 +305,25 @@ export default function AdminPage() {
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold">{request.phone}</span>
-                                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                                <span className="font-semibold">
+                                  {request.phone}
+                                </span>
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-green-100 text-green-800"
+                                >
                                   承認済み
                                 </Badge>
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                チャージ額: ¥{request.amount.toLocaleString()} | 現在残高: ¥
-                                {request.currentBalance?.toLocaleString() || "0"}
+                                チャージ額: ¥{request.amount.toLocaleString()} |
+                                現在残高: ¥
+                                {request.currentBalance?.toLocaleString() ||
+                                  "0"}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                リクエスト: {request.requested_at} | 承認: {request.approved_at}
+                                リクエスト: {request.requested_at} | 承認:{" "}
+                                {request.approved_at}
                               </div>
                             </div>
                           </div>
@@ -295,7 +360,12 @@ export default function AdminPage() {
                         <Input
                           id="name"
                           value={newProduct.name}
-                          onChange={(e) => setNewProduct((prev) => ({ ...prev, name: e.target.value }))}
+                          onChange={(e) =>
+                            setNewProduct((prev) => ({
+                              ...prev,
+                              name: e.target.value,
+                            }))
+                          }
                         />
                       </div>
                       <div>
@@ -304,7 +374,12 @@ export default function AdminPage() {
                           id="price"
                           type="number"
                           value={newProduct.price}
-                          onChange={(e) => setNewProduct((prev) => ({ ...prev, price: e.target.value }))}
+                          onChange={(e) =>
+                            setNewProduct((prev) => ({
+                              ...prev,
+                              price: e.target.value,
+                            }))
+                          }
                         />
                       </div>
                       <Button onClick={handleAddProduct} className="w-full">
@@ -340,14 +415,23 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {filteredProducts.map((product) => (
-                        <tr key={product.id} className="border-b hover:bg-muted/50">
+                        <tr
+                          key={product.id}
+                          className="border-b hover:bg-muted/50"
+                        >
                           <td className="py-3 px-4">{product.name}</td>
-                          <td className="py-3 px-4">¥{product.price.toLocaleString()}</td>
+                          <td className="py-3 px-4">
+                            ¥{product.price.toLocaleString()}
+                          </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex gap-2 justify-end">
                               <Dialog>
                                 <DialogTrigger asChild>
-                                  <Button variant="outline" size="sm" onClick={() => setEditingProduct(product)}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditingProduct(product)}
+                                  >
                                     <Edit className="w-4 h-4" />
                                   </Button>
                                 </DialogTrigger>
@@ -358,12 +442,17 @@ export default function AdminPage() {
                                   {editingProduct && (
                                     <div className="space-y-4">
                                       <div>
-                                        <Label htmlFor="edit-name">商品名</Label>
+                                        <Label htmlFor="edit-name">
+                                          商品名
+                                        </Label>
                                         <Input
                                           id="edit-name"
                                           value={editingProduct.name}
                                           onChange={(e) =>
-                                            setEditingProduct((prev) => ({ ...prev, name: e.target.value }))
+                                            setEditingProduct((prev: any) => ({
+                                              ...prev,
+                                              name: e.target.value,
+                                            }))
                                           }
                                         />
                                       </div>
@@ -374,11 +463,19 @@ export default function AdminPage() {
                                           type="number"
                                           value={editingProduct.price}
                                           onChange={(e) =>
-                                            setEditingProduct((prev) => ({ ...prev, price: Number(e.target.value) }))
+                                            setEditingProduct((prev: any) => ({
+                                              ...prev,
+                                              price: Number(e.target.value),
+                                            }))
                                           }
                                         />
                                       </div>
-                                      <Button onClick={() => handleEditProduct(editingProduct)} className="w-full">
+                                      <Button
+                                        onClick={() =>
+                                          handleEditProduct(editingProduct)
+                                        }
+                                        className="w-full"
+                                      >
                                         更新
                                       </Button>
                                     </div>
@@ -419,9 +516,15 @@ export default function AdminPage() {
             <CardContent>
               <div className="text-center py-8">
                 <BarChart3 className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">詳細な売上分析はLooker Studioで確認できます</p>
+                <p className="text-muted-foreground mb-4">
+                  詳細な売上分析はLooker Studioで確認できます
+                </p>
                 <Button asChild>
-                  <a href="https://lookerstudio.google.com" target="_blank" rel="noopener noreferrer">
+                  <a
+                    href="https://lookerstudio.google.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     Looker Studioを開く
                   </a>
                 </Button>
@@ -431,5 +534,5 @@ export default function AdminPage() {
         )}
       </main>
     </div>
-  )
+  );
 }

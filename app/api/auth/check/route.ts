@@ -1,4 +1,4 @@
-// /app/api/balance/route.ts
+// /app/api/auth/check/route.ts
 import { getBalanceFast } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
@@ -12,24 +12,12 @@ export async function GET(req: Request) {
     });
   }
   const snap = await getBalanceFast(phone);
-  if (!snap.exists) {
-    return new Response(JSON.stringify({ exists: false, error: "not found" }), {
-      status: 404,
-      headers: { "content-type": "application/json" },
-    });
-  }
   return new Response(
     JSON.stringify({
-      phone,
-      balance: snap.balance,
-      last_charge_date: snap.last_charge_date,
+      exists: snap.exists,
+      balance: snap.exists ? snap.balance : undefined,
+      last_charge_date: snap.exists ? snap.last_charge_date : undefined,
     }),
-    {
-      status: 200,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "public, max-age=2",
-      },
-    }
+    { status: 200, headers: { "content-type": "application/json" } }
   );
 }
