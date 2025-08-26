@@ -1,3 +1,4 @@
+/* app/page.tsx */
 "use client";
 
 import { ShoppingCart, Wallet, CreditCard, Plus, X } from "lucide-react";
@@ -11,16 +12,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useEffect, SetStateAction, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import LoginRegisterGate from "@/components/ui/login-register-gate";
 import { getSavedPhone } from "@/lib/client-auth";
 import { openAuthGate } from "@/lib/auth-gate";
+import useSWR from "swr";
+
+type Product = { id: number; name: string; price: number };
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function PurchasePage() {
-  const [products, setProducts] = useState<
-    Array<{ id: number; name: string; price: number }>
-  >([]);
   const [selectedProducts, setSelectedProducts] = useState<
     Array<{ id: string; productId: number | null }>
   >([{ id: "1", productId: null }]);
@@ -29,42 +32,37 @@ export default function PurchasePage() {
   const [purchaseData, setPurchaseData] = useState<any>(null);
   const [phone, setPhone] = useState<string | null>(null);
 
-  // const phoneToUse = phone ?? getSavedPhone();
-  // if (!phoneToUse) {
-  //   openAuthGate(
-  //     "電話番号が未入力です。ログインまたは新規登録をしてください。",
-  //     "home"
-  //   );
-  //   return;
-  // }
-
-  const [hasPhone, setHasPhone] = useState(false);
+  // 電話番号未保存ならゲートを出す（※APIは叩かない）
   useEffect(() => {
-    // クライアントだけで localStorage を読む
     const saved = getSavedPhone();
-    setHasPhone(!!saved);
-    // 未設定なら最初画面モーダルを開くだけ（レンダーは止めない）
     if (!saved) openAuthGate(undefined, "home");
   }, []);
 
-  // ★ StrictMode二重実行を防ぐ
-  const didLoadProducts = useRef(false);
-  useEffect(() => {
-    if (didLoadProducts.current) return;
-    didLoadProducts.current = true;
-    (async () => {
-      const res = await fetch("/api/products", { cache: "no-store" });
-      const data = await res.json();
-      const list = Array.isArray(data?.items) ? data.items : data;
-      setProducts(
-        list.map((p: any) => ({
-          id: p.product_id ?? p.id,
-          name: p.name,
-          price: p.price,
-        }))
-      );
-    })();
-  }, []);
+  // ★ SWR：/api/products を“初回のみ”取得（再検証は全OFF、StrictMode対策でdedupe長め）
+  const {
+    data: productsRaw,
+    isLoading: loadingProducts,
+    error: productsError,
+  } = useSWR("/api/products", fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    revalidateIfStale: false,
+    refreshInterval: 0,
+    dedupingInterval: 600_000, // 10分間は重複fetchを抑止
+    shouldRetryOnError: false,
+  });
+
+  // API が [] でも {items: []} でも動くように正規化
+  const products: Product[] = useMemo(() => {
+    const list = Array.isArray(productsRaw)
+      ? productsRaw
+      : productsRaw?.items ?? [];
+    return list.map((p: any) => ({
+      id: Number(p.product_id ?? p.id),
+      name: p.name,
+      price: Number(p.price ?? 0),
+    }));
+  }, [productsRaw]);
 
   const addProductDropdown = () => {
     const newId = Date.now().toString();
@@ -94,21 +92,19 @@ export default function PurchasePage() {
   };
 
   const getSelectedProductsList = () => {
-    const productCounts: { [key: number]: number } = {};
-
+    const productCounts: Record<number, number> = {};
     selectedProducts.forEach((item) => {
       if (item.productId) {
         productCounts[item.productId] =
           (productCounts[item.productId] || 0) + 1;
       }
     });
-
     return Object.entries(productCounts)
       .map(([productId, quantity]) => {
         const product = products.find((p) => p.id === Number(productId));
         return { ...product, quantity };
       })
-      .filter((item) => item.quantity > 0);
+      .filter((item: any) => item && item.quantity > 0);
   };
 
   const handlePurchase = async () => {
@@ -119,12 +115,10 @@ export default function PurchasePage() {
       alert("商品を選択してください");
       return;
     }
-
     if (balance < totalPrice) {
       alert("残高が不足しています");
       return;
     }
-
     try {
       if (!phone) {
         openAuthGate(
@@ -133,12 +127,11 @@ export default function PurchasePage() {
         );
         return;
       }
-
       const response = await fetch("/api/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: phone,
+          phone,
           items: selectedList.map((it: any) => ({
             product_id: String(it.id),
             qty: Number(it.quantity),
@@ -153,7 +146,13 @@ export default function PurchasePage() {
           result.balance_after ?? balance - getTotalPrice()
         );
         setBalance(newBal);
-        // 以降は既存のレシート表示処理そのまま
+        setPurchaseData({
+          products: selectedList,
+          totalPrice,
+          timestamp: new Date().toLocaleString(),
+          remainingBalance: newBal,
+        });
+        setShowReceipt(true);
       } else {
         alert(
           result?.error ? JSON.stringify(result.error) : "購入に失敗しました"
@@ -217,9 +216,7 @@ export default function PurchasePage() {
               </div>
 
               <Button
-                onClick={() => {
-                  setShowReceipt(false);
-                }}
+                onClick={() => setShowReceipt(false)}
                 className="w-full h-12"
               >
                 OK
@@ -236,7 +233,7 @@ export default function PurchasePage() {
       <LoginRegisterGate
         onAuthed={(p, b) => {
           setPhone(p);
-          setBalance(b); // ログイン時の残高
+          setBalance(b);
         }}
       />
       <div className="min-h-screen bg-background">
@@ -282,8 +279,14 @@ export default function PurchasePage() {
                 <CardTitle className="text-lg">商品を選択</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {productsError && (
+                  <p className="text-sm text-destructive">
+                    商品の取得に失敗しました
+                  </p>
+                )}
+
                 <div className="space-y-3">
-                  {selectedProducts.map((item, index) => (
+                  {selectedProducts.map((item) => (
                     <div key={item.id} className="flex items-center gap-3">
                       <div className="flex-1">
                         <Select
@@ -294,9 +297,16 @@ export default function PurchasePage() {
                               value ? Number(value) : null
                             )
                           }
+                          disabled={loadingProducts}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="商品を選択してください" />
+                            <SelectValue
+                              placeholder={
+                                loadingProducts
+                                  ? "読み込み中…"
+                                  : "商品を選択してください"
+                              }
+                            />
                           </SelectTrigger>
                           <SelectContent>
                             {products.map((product) => (
@@ -327,6 +337,7 @@ export default function PurchasePage() {
                     variant="outline"
                     onClick={addProductDropdown}
                     className="w-full h-10 border-dashed border-primary text-primary hover:bg-primary/10 bg-transparent"
+                    disabled={loadingProducts}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     商品を追加
@@ -346,7 +357,7 @@ export default function PurchasePage() {
 
                 <Button
                   onClick={handlePurchase}
-                  disabled={getTotalPrice() === 0}
+                  disabled={getTotalPrice() === 0 || loadingProducts}
                   className="w-full h-12 text-lg font-semibold"
                 >
                   購入する

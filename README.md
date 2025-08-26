@@ -6,7 +6,7 @@
 
 - **Products** — `product_id, name, price`
 - **Users** — `phone, balance, last_charge_date`
-- **Transactions** — `timestamp, phone_number, product_id, quantity, total_amount`
+- **Transactions** — `timestamp, phone, product_id, quantity, total_amount`
 - **ChargeRequests** — `id, phone, amount, approved, requested_at, approved_at`
   - `approved`: `"true"` / `"false"`
 - **AdminSubscriptions** — `adminId, subscription`（Push 購読 JSON 文字列）

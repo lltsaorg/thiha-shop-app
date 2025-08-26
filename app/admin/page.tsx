@@ -1,6 +1,9 @@
 "use client";
 
+import useSWR from "swr";
+import useSWRImmutable from "swr/immutable";
 import { useState, useEffect } from "react";
+import { fetcher } from "@/lib/fetcher";
 import {
   CreditCard,
   Package,
@@ -26,44 +29,69 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+type AdminChargeRequest = {
+  id: string;
+  phone: string;
+  amount: number;
+  approved: boolean;
+  requested_at?: string;
+  approved_at?: string;
+  currentBalance?: number;
+};
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("charge");
-  const [requests, setRequests] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const [notification, setNotification] = useState("");
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [newProduct, setNewProduct] = useState({ name: "", price: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Load charge requests
-        const requestsResponse = await fetch("/api/charge-requests");
-        const requestsData = await requestsResponse.json();
-        setRequests(requestsData);
+  // 変わりにくい商品は immutable（初回のみ取得・手動で再取得する）
+  const {
+    data: productsRaw,
+    isLoading: loadingProducts,
+    mutate: refetchProducts,
+  } = useSWRImmutable("/api/products", fetcher);
 
-        // Load products
-        const productsResponse = await fetch("/api/products");
-        const productsData = await productsResponse.json();
-        setProducts(
-          productsData.map((p: any) => ({
-            id: p.product_id,
-            name: p.name,
-            price: p.price,
-          }))
-        );
-      } catch (error) {
-        console.error("Failed to load data:", error);
-      }
-    };
+  // チャージリクエストは通常SWR（自動再検証は全OFF）
+  const {
+    data: chargeRaw,
+    isLoading: loadingCR,
+    mutate: refetchCharge,
+  } = useSWR("/api/charge-requests?status=all", fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    revalidateIfStale: false,
+    dedupingInterval: 10_000,
+    refreshInterval: 0,
+    shouldRetryOnError: false,
+  });
 
-    loadData();
-    // Refresh data every 5 seconds
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // /api/products は {items: []} でも [] でもOKにする & 画面の型に合わせて整形
+  const products: any[] = (
+    Array.isArray(productsRaw) ? productsRaw : productsRaw?.items ?? []
+  ).map((p: any) => ({
+    id: p.product_id ?? p.id ?? p.uuid,
+    name: p.name,
+    price: Number(p.price ?? 0),
+  }));
+
+  // /api/charge-requests も同様に整形（既存と同じキーへ正規化）
+  const requests: AdminChargeRequest[] = (
+    Array.isArray(chargeRaw) ? chargeRaw : chargeRaw?.items ?? []
+  ).map((r: any) => ({
+    id: r.id ?? r.request_id ?? r.uuid,
+    phone: r.phone,
+    amount: Number(r.amount ?? 0),
+    approved:
+      typeof r.approved === "boolean"
+        ? r.approved
+        : String(r.approved).toLowerCase() === "true",
+    requested_at: r.requested_at ?? r.createdAt ?? r.created_at ?? "",
+    approved_at: r.approved_at ?? r.approvedAt ?? "",
+    currentBalance: r.currentBalance ?? r.balance,
+  }));
 
   const handleApprove = async (requestId: string) => {
     setIsLoading(true);
@@ -78,11 +106,7 @@ export default function AdminPage() {
 
       const result = await response.json();
       if (result.success) {
-        setRequests((prev) =>
-          prev.map((req) =>
-            req.id === requestId ? { ...req, approved: true } : req
-          )
-        );
+        await refetchCharge(); // ← 一括で最新化（同キーのみ）
         setNotification("チャージリクエストを承認しました");
         setTimeout(() => setNotification(""), 3000);
       } else {
@@ -114,9 +138,8 @@ export default function AdminPage() {
 
       const result = await response.json();
       if (result.success) {
-        setProducts((prev) =>
-          prev.map((p) => (p.id === product.id ? product : p))
-        );
+        await refetchProducts(); // ← 最新化
+        setEditingProduct(null);
         setEditingProduct(null);
         setNotification("商品を更新しました");
         setTimeout(() => setNotification(""), 3000);
@@ -150,17 +173,7 @@ export default function AdminPage() {
 
       const result = await response.json();
       if (result.success) {
-        // Reload products
-        const productsResponse = await fetch("/api/products");
-        const productsData = await productsResponse.json();
-        setProducts(
-          productsData.map((p: any) => ({
-            id: p.product_id,
-            name: p.name,
-            price: p.price,
-          }))
-        );
-
+        await refetchProducts(); // ← 最新化
         setNewProduct({ name: "", price: "" });
         setNotification("商品を追加しました");
         setTimeout(() => setNotification(""), 3000);

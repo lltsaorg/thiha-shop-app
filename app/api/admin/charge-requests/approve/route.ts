@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   row[header.get("approved_at")!] = nowISO();
   await updateRange(a1(TAB.CHARGE_REQ, `A${rowIndex}:Z${rowIndex}`), [row]);
 
-  // Users に反映（phone_number 列）
+  // Users に反映（phone 列）
   const user = await findUserRowByPhoneNumber(phone);
   const now = nowISO();
   if (user) {

@@ -15,7 +15,7 @@ const auth = new google.auth.JWT({
 
 const api = google.sheets({ version: "v4", auth });
 
-/** タブ名（envで上書き可）。Users は phone_number 列を前提 */
+/** タブ名（envで上書き可）。Users は phone 列を前提 */
 export const TAB = {
   PRODUCTS: process.env.SHEET_TAB_PRODUCTS ?? "Products",
   USERS: process.env.SHEET_TAB_USERS ?? "Users",
@@ -76,7 +76,7 @@ export async function getAllRows(sheet: string) {
   return await getValues(a1(sheet, "A2:Z"));
 }
 
-/** Users: phone_number で検索（結果を 2 秒キャッシュ） */
+/** Users: phone で検索（結果を 2 秒キャッシュ） */
 const BAL_TTL = Number(process.env.BALANCE_CACHE_TTL_MS ?? 2000);
 export async function getBalanceFast(phoneNumber: string) {
   return cached<{
@@ -88,7 +88,7 @@ export async function getBalanceFast(phoneNumber: string) {
     row?: any[];
   }>(`bal:${phoneNumber}`, BAL_TTL, async () => {
     const header = await getHeaderMap(TAB.USERS);
-    const phoneIdx = header.get("phone_number")!;
+    const phoneIdx = header.get("phone")!;
     const balIdx = header.get("balance")!;
     const lcdIdx = header.get("last_charge_date")!;
     const rows = await getAllRows(TAB.USERS);
@@ -115,7 +115,7 @@ export function invalidateBalanceCache(phoneNumber: string) {
 /** 1回もの検索（更新時などに使用） */
 export async function findUserRowByPhoneNumber(phoneNumber: string) {
   const header = await getHeaderMap(TAB.USERS);
-  const phoneIdx = header.get("phone_number")!;
+  const phoneIdx = header.get("phone")!;
   const rows = await getAllRows(TAB.USERS);
   for (let i = 0; i < rows.length; i++) {
     if ((rows[i][phoneIdx] ?? "") === phoneNumber) {

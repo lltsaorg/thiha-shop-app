@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
   // ユーザーが存在しない場合は購入を拒否
   const u = await findUserRowByPhoneNumber(phone);
-  if (!u) return json({ error: "unknown phone_number" }, 400);
+  if (!u) return json({ error: "unknown phone" }, 400);
 
   const current = Number(u.row[u.header.get("balance")!] ?? 0);
 
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     total_amount: (it.total_amount ?? it.total)!,
   }));
 
-  // Transactions に [timestamp, phone_number, product_id, quantity, total_amount]
+  // Transactions に [timestamp, phone, product_id, quantity, total_amount]
   for (const it of normalized) {
     await appendRow(TAB.TX, [
       nowISO(),
