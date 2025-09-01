@@ -258,7 +258,7 @@ export default function ChargePage() {
 
               <Link href="/" className="block">
                 <Button variant="outline" className="w-full bg-transparent">
-                  Back to Home
+                  Back Home
                 </Button>
               </Link>
             </CardContent>
