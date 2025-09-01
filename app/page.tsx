@@ -670,8 +670,8 @@ export default function PurchasePage() {
         {/* ✅ 修正点：商品選択モーダル本体 */}
         <Dialog open={showProductModal} onOpenChange={closeProductModal}>
           <DialogContent
-            className="max-w-md w-[calc(100%-24px)] max-h-[80vh] overflow-y-auto flex flex-col
-              !left-1/2 !top-[35%] !-translate-x-1/2"
+            className="max-w-md w-[calc(100%-24px)] max-h-[80vh] overflow-hidden flex flex-col
+              !left-1/2 !top-[10vh] !-translate-x-1/2 !translate-y-0"
           >
             <DialogHeader>
               <DialogTitle>
@@ -679,11 +679,11 @@ export default function PurchasePage() {
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 flex-1 flex flex-col">
+            <div className="space-y-4 flex-1 min-h-0 flex flex-col">
               {/* 追加 or 編集で分岐 */}
               {editingProductId ? (
                 /* ====== 編集モード：検索UIは出さず、商品名を表示してQtyのみ変更 ====== */
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1 min-h-0 overflow-y-auto pr-1">
                   <div className="rounded-lg border p-3 bg-muted/50">
                     <div className="text-xs text-muted-foreground mb-1">
                       Selected Item
@@ -760,8 +760,8 @@ export default function PurchasePage() {
                     />
                   </div>
 
-                  {/* 商品リスト：選択後は選択中の商品だけを表示。高さは一定に保つ */}
-                  <div className="h-[240px] space-y-2">
+                  {/* 商品リスト：中央エリアをスクロールさせ、フッターと重ならないようにする */}
+                  <div className="flex-1 min-h-0 space-y-2 overflow-y-auto pr-1">
                     {selectedProductInModal ? (
                       <>
                         <div className="w-full p-3 rounded-lg border bg-primary/5">
@@ -869,23 +869,25 @@ export default function PurchasePage() {
                 </>
               )}
 
-              {/* ボタン */}
-              <div className="flex gap-3 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={closeProductModal}
-                  className="flex-1 bg-transparent"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleModalOk}
-                  disabled={!selectedProductInModal}
-                  className="flex-1"
-                >
-                  OK
-                </Button>
-              </div>
+              {/* ボタン：アイテム選択済み（または編集モード）でのみ表示 */}
+              {(editingProductId || selectedProductInModal) && (
+                <div className="flex gap-3 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={closeProductModal}
+                    className="flex-1 bg-transparent"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleModalOk}
+                    disabled={!selectedProductInModal}
+                    className="flex-1"
+                  >
+                    OK
+                  </Button>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
