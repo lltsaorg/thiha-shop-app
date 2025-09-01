@@ -31,6 +31,14 @@ import {
 } from "@/components/ui/dialog";
 import { formatYGNMinute } from "@/lib/utils";
 
+// Analytics external links from env (client-side)
+const ANALYTICS_SPREADSHEET_URL =
+  process.env.NEXT_PUBLIC_ANALYTICS_SPREADSHEET_URL ||
+  "https://lookerstudio.google.com";
+const ANALYTICS_DASHBOARD_URL =
+  process.env.NEXT_PUBLIC_ANALYTICS_DASHBOARD_URL ||
+  "https://lookerstudio.google.com";
+
 type AdminChargeRequest = {
   id: string;
   phone: string;
@@ -770,19 +778,26 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent>
               <div className="text-center py-8">
-                <BarChart3 className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">
-                  詳細な売上分析はLooker Studioで確認できます
-                </p>
-                <Button asChild>
-                  <a
-                    href="https://lookerstudio.google.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Looker Studioを開く
-                  </a>
-                </Button>
+                <div className="flex flex-col items-center gap-8">
+                  <Button asChild size="lg" className="h-12 px-8 text-lg">
+                    <a
+                      href={ANALYTICS_SPREADSHEET_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      スプレッドシートを開く
+                    </a>
+                  </Button>
+                  <Button asChild size="lg" className="h-12 px-8 text-lg">
+                    <a
+                      href={ANALYTICS_DASHBOARD_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      ダッシュボードを開く
+                    </a>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
