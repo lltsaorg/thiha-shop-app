@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSavedPhone } from "@/lib/client-auth";
 import useSWR, { useSWRConfig } from "swr";
@@ -64,6 +65,8 @@ export default function PurchasePage() {
   const [purchaseData, setPurchaseData] = useState<any>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [insufficientOpen, setInsufficientOpen] = useState(false);
+  const router = useRouter();
 
   // 電話番号は state に保持（BalanceGuard がゲート表示を担当）
   useEffect(() => {
@@ -311,7 +314,7 @@ export default function PurchasePage() {
       return;
     }
     if (balance < totalPrice) {
-      alert("Shortage of Balance");
+      setInsufficientOpen(true);
       return;
     }
     try {
@@ -566,7 +569,14 @@ export default function PurchasePage() {
 
                 {/* 購入ボタン（購入確認モーダルは現状維持） */}
                 <Button
-                  onClick={() => setConfirmOpen(true)}
+                  onClick={() => {
+                    const total = getTotalPrice();
+                    if (total > 0 && balance < total) {
+                      setInsufficientOpen(true);
+                      return;
+                    }
+                    setConfirmOpen(true);
+                  }}
                   disabled={getTotalPrice() === 0 || loadingProducts}
                   className="w-full h-12 text-lg font-semibold"
                 >
@@ -628,6 +638,30 @@ export default function PurchasePage() {
                     </div>
                   </div>
                 </ConfirmModal>
+
+                {/* 残高不足モーダル */}
+                <Dialog
+                  open={insufficientOpen}
+                  onOpenChange={setInsufficientOpen}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Insufficient Balance</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 text-center">
+                      <p>Go back to Home, request charge money.</p>
+                      <Button
+                        className="w-full h-11"
+                        onClick={() => {
+                          setInsufficientOpen(false);
+                          router.push("/");
+                        }}
+                      >
+                        Back Home
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           </div>
