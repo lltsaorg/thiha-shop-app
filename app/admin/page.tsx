@@ -100,6 +100,8 @@ export default function AdminPage() {
   const [crHasMore, setCrHasMore] = useState(false);
   const [crLoaded, setCrLoaded] = useState(false);
   const [loadingCR, setLoadingCR] = useState(false);
+  const [crDirty, setCrDirty] = useState(false);
+  const [lastCrLoadAt, setLastCrLoadAt] = useState<number>(0);
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
     list.map((r: any) => ({
@@ -140,6 +142,7 @@ export default function AdminPage() {
       } finally {
         setLoadingCR(false);
         setCrLoaded(true);
+        setLastCrLoadAt(Date.now());
       }
     },
     [loadingCR, crOffset, PAGE_SIZE]
@@ -161,7 +164,11 @@ export default function AdminPage() {
     const onMsg = (e: MessageEvent<any>) => {
       const msg = e.data || {};
       if (msg.type === "CR_CHANGED") {
-        if (activeTab === "charge") loadChargeRequests({ reset: true });
+        setCrDirty(true);
+        if (activeTab === "charge" && document.visibilityState === "visible") {
+          loadChargeRequests({ reset: true });
+          setCrDirty(false);
+        }
       }
       if (msg.type === "BALANCE_CHANGED" && msg.phone) {
         const key = `/api/balance?phone=${encodeURIComponent(
@@ -179,6 +186,25 @@ export default function AdminPage() {
     bc.addEventListener("message", onMsg);
     return () => bc.removeEventListener("message", onMsg);
   }, [mutate, loadChargeRequests, activeTab]);
+
+  // フォーカス/可視化時に最新化（低コスト：必要時のみ）
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "charge") return;
+      const now = Date.now();
+      const stale = now - lastCrLoadAt > 5000; // 5秒以上経過で再取得
+      if (crDirty || stale) {
+        loadChargeRequests({ reset: true });
+        setCrDirty(false);
+      }
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, crDirty, lastCrLoadAt, loadChargeRequests]);
 
   // products 整形
   const products: any[] = (
@@ -226,6 +252,9 @@ export default function AdminPage() {
           type: "BALANCE_CHANGED",
           phone: req.phone,
         });
+        new BroadcastChannel("thiha-shop").postMessage({
+          type: "CR_CHANGED",
+        });
         setNotification("チャージリクエストを承認しました");
         setTimeout(() => setNotification(""), 3000);
       } else {
@@ -255,6 +284,10 @@ export default function AdminPage() {
         setEditingProduct(null);
         setNotification("商品を更新しました");
         setTimeout(() => setNotification(""), 3000);
+        // 他タブ（購入画面など）へ商品変更を通知（SWR再取得を促す）
+        new BroadcastChannel("thiha-shop").postMessage({
+          type: "PRODUCTS_CHANGED",
+        });
       }
     } catch (error) {
       console.error("Product update failed:", error);
@@ -285,6 +318,9 @@ export default function AdminPage() {
       if (res.ok && result?.success !== false) {
         await refetchProducts();
         setNotification("商品を削除しました");
+        new BroadcastChannel("thiha-shop").postMessage({
+          type: "PRODUCTS_CHANGED",
+        });
       } else {
         setNotification(
           `商品の削除に失敗しました：${result?.error ?? res.statusText}`
@@ -319,6 +355,9 @@ export default function AdminPage() {
         setIsAddOpen(false);
         setNotification("商品を追加しました");
         setTimeout(() => setNotification(""), 3000);
+        new BroadcastChannel("thiha-shop").postMessage({
+          type: "PRODUCTS_CHANGED",
+        });
       }
     } catch (error) {
       console.error("Product addition failed:", error);

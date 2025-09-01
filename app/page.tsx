@@ -36,6 +36,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 // ブラウザ用 Supabase クライアント
 import { createClient } from "@supabase/supabase-js";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+// NOTE: Supabase browser client is no longer used for Realtime on this page
 const supabaseBrowser = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
@@ -136,21 +137,7 @@ export default function PurchasePage() {
     dedupingInterval: 3000,
   });
 
-  // Supabase Realtime
-  useEffect(() => {
-    const ch = supabaseBrowser
-      .channel("products-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "Products" },
-        () => revalidateProducts()
-      )
-      .subscribe();
-
-    return () => {
-      supabaseBrowser.removeChannel(ch);
-    };
-  }, [revalidateProducts]);
+  // Realtime削除: 代わりに BroadcastChannel と SWR の focus/reconnect で更新
 
   // 同一端末の他タブからの通知でも再取得
   useEffect(() => {
