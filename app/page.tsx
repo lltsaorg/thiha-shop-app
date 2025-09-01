@@ -204,6 +204,24 @@ export default function PurchasePage() {
   }, [products, searchQuery]);
   // ====== /修正点 ======
 
+  // 選択済み商品の商品名・価格を最新の products に追従させる（API増加なし、リアルタイム追加なし）
+  useEffect(() => {
+    if (!products || products.length === 0) return;
+    setSelectedProducts((prev) =>
+      prev.map((row) => {
+        const latest = products.find((p) => p.id === row.product.id);
+        if (!latest) return row;
+        if (
+          latest.name !== row.product.name ||
+          Number(latest.price) !== Number(row.product.price)
+        ) {
+          return { ...row, product: latest };
+        }
+        return row;
+      })
+    );
+  }, [products]);
+
   // 検索条件変更時：選択中の商品が結果に存在しなければ選択を解除（追加モードのみ）
   useEffect(() => {
     if (editingProductId) return; // 編集モードは対象外（検索UIなし）
@@ -227,12 +245,28 @@ export default function PurchasePage() {
     setQuantityInModal(1);
   }, [showProductModal, editingProductId, searchQuery, selectedProductInModal]);
 
+  // 編集モーダルを開いている最中も、対象商品の最新情報に追従させる
+  useEffect(() => {
+    if (!selectedProductInModal) return;
+    const latest = products.find((p) => p.id === selectedProductInModal.id);
+    if (!latest) return;
+    if (
+      latest.name !== selectedProductInModal.name ||
+      Number(latest.price) !== Number(selectedProductInModal.price)
+    ) {
+      setSelectedProductInModal(latest);
+    }
+  }, [products, selectedProductInModal]);
+
   // ====== 修正点：モーダルの開閉・編集開始・確定・削除 ======
   const openProductModal = (editId?: string) => {
     if (editId) {
       const existing = selectedProducts.find((p) => p.id === editId);
       if (existing) {
-        setSelectedProductInModal(existing.product);
+        // 既存選択の編集時も最新の products から取得してモーダルに反映
+        const latest =
+          products.find((p) => p.id === existing.product.id) || existing.product;
+        setSelectedProductInModal(latest);
         setQuantityInModal(existing.quantity);
         setEditingProductId(editId);
       }
@@ -500,11 +534,8 @@ export default function PurchasePage() {
                 {/* ✅ 修正点：選択済み一覧（表形式・改行対応・編集/削除） */}
                 {selectedProducts.length > 0 && (
                   <div className="space-y-3">
-                    <h3 className="font-semibold text-sm text-muted-foreground">
-                      Selected Items
-                    </h3>
                     {selectedProducts.map((item) => (
-                      <div key={item.id} className="bg-muted p-3 rounded-lg">
+                      <div key={item.id} className="bg-muted p-1 rounded-lg">
                         <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
                           <div className="min-w-0">
                             <p className="text-sm font-medium break-words leading-tight">
