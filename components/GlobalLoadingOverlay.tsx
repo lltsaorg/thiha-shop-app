@@ -9,6 +9,7 @@ export default function GlobalLoadingOverlay() {
   return (
     <div
       className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm flex items-center justify-center"
+      data-testid="global-loading-overlay"
       aria-hidden="true"
     >
       <div className="flex flex-col items-center gap-3 text-white select-none">

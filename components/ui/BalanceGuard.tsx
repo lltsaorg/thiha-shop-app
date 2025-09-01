@@ -5,6 +5,7 @@ import * as React from "react";
 import useSWR from "swr";
 import LoginRegisterGate from "@/components/ui/login-register-gate";
 import { apiFetch } from "@/lib/api";
+import { getSavedPhone, setSavedPhone } from "@/lib/client-auth";
 
 const fetcher = async (u: string) => {
   const res = await apiFetch(u, { lockUI: false });
@@ -19,7 +20,7 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
   const [phone, setPhone] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    setPhone(localStorage.getItem("phone"));
+    setPhone(getSavedPhone());
   }, []);
 
   const { data } = useSWR(
@@ -36,6 +37,7 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
 
   // Gate 完了時に phone を保存
   const handleAuthed = React.useCallback((p: string, _b: number) => {
+    setSavedPhone(p);
     setPhone(p);
   }, []);
 

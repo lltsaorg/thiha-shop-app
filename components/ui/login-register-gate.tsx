@@ -27,6 +27,21 @@ export function normalizeToDomestic(input: string): string | null {
 }
 
 export default function LoginRegisterGate({ onAuthed }: Props) {
+  const USE_SIM = process.env.NEXT_PUBLIC_USE_SIM_AUTH === "1";
+  const getCheckUrl = (p: string) =>
+    USE_SIM
+      ? `/api/test/check-sim?phone=${encodeURIComponent(p)}`
+      : `/api/auth/check?phone=${encodeURIComponent(p)}`;
+  const getRegisterUrl = () => {
+    if (!USE_SIM) return "/api/auth/register";
+    let delay = 800;
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const d = Number(sp.get("simDelay") || "");
+      if (Number.isFinite(d) && d >= 0 && d <= 5000) delay = d;
+    }
+    return `/api/test/register-sim?delay=${delay}`;
+  };
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AuthGateMode>("home");
   const [phone, setPhone] = useState("");
@@ -87,7 +102,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
   async function autoLogin(p: string) {
     try {
       const r = await apiFetch(
-        `/api/auth/check?phone=${encodeURIComponent(p)}`,
+        getCheckUrl(p),
         {
           cache: "no-store",
           lockUI: false,
@@ -116,7 +131,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
     try {
       // ★ 送信も保存も正規化した 09... を使用
       const r = await apiFetch(
-        `/api/auth/check?phone=${encodeURIComponent(normalized)}`,
+        getCheckUrl(normalized),
         {
           cache: "no-store",
           lockUI: false,
@@ -158,10 +173,10 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
     try {
       // 事前チェック：既に登録済みならモーダル表示して終了
       try {
-        const r0 = await apiFetch(
-          `/api/auth/check?phone=${encodeURIComponent(normalized)}`,
-          { cache: "no-store", lockUI: false }
-        );
+        const r0 = await apiFetch(getCheckUrl(normalized), {
+          cache: "no-store",
+          lockUI: false,
+        });
         const j0 = await r0.json().catch(() => ({}));
         if (r0.ok && j0?.exists) {
           setAlreadyExistsOpen(true);
@@ -169,7 +184,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
         }
       } catch {}
 
-      const r = await apiFetch(`/api/auth/register`, {
+      const r = await apiFetch(getRegisterUrl(), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ phone: normalized }),
