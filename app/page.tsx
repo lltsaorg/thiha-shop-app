@@ -36,6 +36,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 // ブラウザ用 Supabase クライアント
 import { createClient } from "@supabase/supabase-js";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // NOTE: Supabase browser client is no longer used for Realtime on this page
 const supabaseBrowser = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -68,6 +69,15 @@ export default function PurchasePage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [insufficientOpen, setInsufficientOpen] = useState(false);
   const router = useRouter();
+
+  // ====== 履歴（手動取得）用の state ======
+  const [crLoading, setCrLoading] = useState(false);
+  const [crLoaded, setCrLoaded] = useState(false);
+  const [crPending, setCrPending] = useState<any[]>([]);
+  const [crApproved, setCrApproved] = useState<any[]>([]);
+  const [pLoading, setPLoading] = useState(false);
+  const [pLoaded, setPLoaded] = useState(false);
+  const [purchases, setPurchases] = useState<any[]>([]);
 
   // 電話番号は state に保持（BalanceGuard がゲート表示を担当）
   useEffect(() => {
@@ -125,6 +135,48 @@ export default function PurchasePage() {
       setBalance(apiBal);
     }
   }, [balanceSnap, balance]);
+
+  // ====== 履歴取得関数（押したときだけ取得） ======
+  const loadChargeHistory = async () => {
+    if (!normalizedPhone || crLoading) return;
+    setCrLoading(true);
+    try {
+      const res = await apiFetch(
+        `/api/me/charge-requests?phone=${encodeURIComponent(normalizedPhone)}&status=all&limit=100`,
+        { lockUI: false }
+      );
+      const json = await res.json().catch(() => ({}));
+      const raw = Array.isArray(json) ? json : json?.items ?? [];
+      const pending = raw.filter((r: any) => !r.approved);
+      const approved = raw.filter((r: any) => !!r.approved);
+      setCrPending(pending);
+      setCrApproved(approved);
+      setCrLoaded(true);
+    } catch (e) {
+      console.error("Failed to load charge history", e);
+    } finally {
+      setCrLoading(false);
+    }
+  };
+
+  const loadPurchases = async () => {
+    if (!normalizedPhone || pLoading) return;
+    setPLoading(true);
+    try {
+      const res = await apiFetch(
+        `/api/me/purchases?phone=${encodeURIComponent(normalizedPhone)}&limit=100`,
+        { lockUI: false }
+      );
+      const json = await res.json().catch(() => ({}));
+      const raw = Array.isArray(json) ? json : json?.items ?? [];
+      setPurchases(raw);
+      setPLoaded(true);
+    } catch (e) {
+      console.error("Failed to load purchases", e);
+    } finally {
+      setPLoading(false);
+    }
+  };
 
   // /api/products
   const {
@@ -679,6 +731,128 @@ export default function PurchasePage() {
                     </div>
                   </DialogContent>
                 </Dialog>
+              </CardContent>
+            </Card>
+
+            {/* History Card: Request Charge & Purchase (manual fetch) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Your History</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Tabs defaultValue="cr" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="cr">Request Charge Money</TabsTrigger>
+                    <TabsTrigger value="purchase">Purchase</TabsTrigger>
+                  </TabsList>
+
+                  {/* Request Charge Money tab */}
+                  <TabsContent value="cr" className="mt-4">
+                    {!crLoaded ? (
+                      <div className="flex flex-col items-center gap-3 py-4">
+                        <p className="text-sm text-muted-foreground">Tap to load</p>
+                        <Button onClick={loadChargeHistory} disabled={!normalizedPhone || crLoading}>
+                          {crLoading ? "Loading..." : "Load Requests"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex justify-end">
+                          <Button variant="outline" size="sm" onClick={loadChargeHistory} disabled={crLoading}>Reload</Button>
+                        </div>
+                        <Tabs defaultValue="pending" className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="pending">Pending ({crPending.length})</TabsTrigger>
+                            <TabsTrigger value="approved">Approved ({crApproved.length})</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="pending" className="mt-4">
+                            {crPending.length === 0 ? (
+                              <div className="space-y-2">
+                                <div className="text-center py-6 text-muted-foreground">No pending</div>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-3">
+                                {crPending.map((r: any) => (
+                                  <Card key={r.id} className="py-2 gap-2 border-2 border-primary/20">
+                                    <CardContent className="p-3">
+                                      <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-2">
+                                            <Badge variant="secondary" className="bg-primary/10 text-primary">Pending</Badge>
+                                          </div>
+                                          <div className="text-sm text-muted-foreground">Amount: {Number(r.amount).toLocaleString()}ks</div>
+                                          <div className="text-xs text-muted-foreground">Requested: {formatYGNMinute(r.requested_at)}</div>
+                                        </div>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </TabsContent>
+                          <TabsContent value="approved" className="mt-4">
+                            {crApproved.length === 0 ? (
+                              <div className="space-y-2">
+                                <div className="text-center py-6 text-muted-foreground">No approved</div>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-3">
+                                {crApproved.map((r: any) => (
+                                  <Card key={r.id} className="py-2 gap-2">
+                                    <CardContent className="p-3">
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-2"><Badge variant="secondary" className="bg-green-100 text-green-800">Approved</Badge></div>
+                                        <div className="text-sm text-muted-foreground">Amount: {Number(r.amount).toLocaleString()}ks</div>
+                                        <div className="text-xs text-muted-foreground">Requested: {formatYGNMinute(r.requested_at)} | Approved: {formatYGNMinute(r.approved_at)}</div>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </TabsContent>
+                        </Tabs>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  {/* Purchase tab */}
+                  <TabsContent value="purchase" className="mt-4">
+                    {!pLoaded ? (
+                      <div className="flex flex-col items-center gap-3 py-4">
+                        <p className="text-sm text-muted-foreground">Tap to load</p>
+                        <Button onClick={loadPurchases} disabled={!normalizedPhone || pLoading}>
+                          {pLoading ? "Loading..." : "Load Purchases"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex justify-end">
+                          <Button variant="outline" size="sm" onClick={loadPurchases} disabled={pLoading}>Reload</Button>
+                        </div>
+                        {purchases.length === 0 ? (
+                          <div className="text-center py-6 text-muted-foreground">No purchases</div>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-3">
+                            {purchases.map((t: any) => (
+                              <Card key={t.id} className="py-2 gap-2">
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                      <div className="font-medium break-words leading-tight">{t.product_name || `#${t.product_id}`}</div>
+                                      <div className="text-sm text-muted-foreground">Qty: {Number(t.quantity)} / Amount: {Number(t.total_amount).toLocaleString()}ks</div>
+                                      <div className="text-xs text-muted-foreground">{formatYGNMinute(t.created_at)}</div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </div>
