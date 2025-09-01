@@ -476,16 +476,15 @@ export default function PurchasePage() {
                   </Badge>
                 </div>
               </CardContent>
+              <CardContent className="pt-0 px-4">
+                <Link href="/charge">
+                  <Button className="w-full h-12 text-lg font-semibold">
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    Request Charge Money
+                  </Button>
+                </Link>
+              </CardContent>
             </Card>
-
-            <div className="mb-8">
-              <Link href="/charge">
-                <Button className="w-full h-12 text-lg font-semibold">
-                  <CreditCard className="w-5 h-5 mr-2" />
-                  Request Charge Money
-                </Button>
-              </Link>
-            </div>
 
             <Card>
               <CardHeader>
