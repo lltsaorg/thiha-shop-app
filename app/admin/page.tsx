@@ -2,7 +2,7 @@
 
 import useSWR, { useSWRConfig } from "swr";
 import useSWRImmutable from "swr/immutable";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { fetcher } from "@/lib/fetcher";
 import { apiFetch } from "@/lib/api";
 import {
@@ -143,11 +143,15 @@ export default function AdminPage() {
     [loadingCR, crOffset, PAGE_SIZE]
   );
 
-  // タブが charge の時に初回ロード
+  // タブが charge の時に初回ロード（StrictMode でも一度だけ）
+  const didInitRef = useRef(false);
   useEffect(() => {
     if (activeTab !== "charge") return;
-    if (crItems.length === 0 && !loadingCR) loadChargeRequests({ reset: true });
-  }, [activeTab, crItems.length, loadingCR, loadChargeRequests]);
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    loadChargeRequests({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // BroadcastChannel で変更検知
   useEffect(() => {
