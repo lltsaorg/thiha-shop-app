@@ -97,7 +97,8 @@ export default function AdminPage() {
   const PAGE_SIZE = 50;
   const [crItems, setCrItems] = useState<AdminChargeRequest[]>([]);
   const [crOffset, setCrOffset] = useState(0);
-  const [crHasMore, setCrHasMore] = useState(true);
+  const [crHasMore, setCrHasMore] = useState(false);
+  const [crLoaded, setCrLoaded] = useState(false);
   const [loadingCR, setLoadingCR] = useState(false);
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
@@ -138,6 +139,7 @@ export default function AdminPage() {
         console.error("Failed to load charge-requests:", e);
       } finally {
         setLoadingCR(false);
+        setCrLoaded(true);
       }
     },
     [loadingCR, crOffset, PAGE_SIZE]
@@ -489,7 +491,7 @@ export default function AdminPage() {
                     </div>
                   )}
                   {/* もっと見る（承認待ちタブ内） */}
-                  {crHasMore && (
+                  {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
                         onClick={() => loadChargeRequests()}
@@ -567,7 +569,7 @@ export default function AdminPage() {
                     </div>
                   )}
                   {/* もっと見る（処理済みタブ内） */}
-                  {crHasMore && (
+                  {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
                         onClick={() => loadChargeRequests()}

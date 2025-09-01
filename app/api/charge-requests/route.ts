@@ -15,10 +15,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const status =
       (searchParams.get("status") as "pending" | "approved" | "all") || "all";
-    // Pagination (default: 50, max: 200)
+    // Pagination (default: 50, max: 50)
     const limit = Math.min(
       Math.max(Number(searchParams.get("limit") ?? 50), 1),
-      200
+      50
     );
     const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
 
@@ -27,8 +27,9 @@ export async function GET(req: Request) {
       .select(
         "id,user_id,amount,approved,requested_at,approved_at, Users(phone_number,balance,last_charge_date)"
       )
-      // 新しい順で上に来るように並べる
+      // 新しい順で上に来るように並べる（安定した並びのため id も降順）
       .order("requested_at", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: false })
       // Apply pagination to reduce memory and payload
       .range(offset, offset + limit - 1);
     if (status === "pending") query = query.eq("approved", false);
