@@ -18,6 +18,7 @@ type ConfirmModalProps = {
   onConfirm: () => void | Promise<void>;
   confirmLabel?: string;
   cancelLabel?: string;
+  hideCancel?: boolean;
   children?: ReactNode;
 };
 
@@ -29,6 +30,7 @@ export default function ConfirmModal({
   onConfirm,
   confirmLabel = "確定",
   cancelLabel = "戻る",
+  hideCancel = false,
   children,
 }: ConfirmModalProps) {
   return (
@@ -42,9 +44,11 @@ export default function ConfirmModal({
         <div className="mt-2 space-y-3">{children}</div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {cancelLabel}
-          </Button>
+          {!(hideCancel || cancelLabel === "") && (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {cancelLabel}
+            </Button>
+          )}
           <Button onClick={onConfirm}>{confirmLabel}</Button>
         </DialogFooter>
       </DialogContent>

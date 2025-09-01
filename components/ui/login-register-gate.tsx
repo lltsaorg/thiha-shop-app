@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { AuthGateMode } from "@/lib/auth-gate";
 import { apiFetch } from "@/lib/api";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 type Props = {
   onAuthed: (phone: string, balance: number) => void;
@@ -33,6 +34,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
   const [loading, setLoading] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const tried = useRef(false);
+  const [alreadyExistsOpen, setAlreadyExistsOpen] = useState(false);
+  const [confirmRegisterOpen, setConfirmRegisterOpen] = useState(false);
 
   const onAuthedRef = useRef(onAuthed);
   useEffect(() => {
@@ -153,6 +156,19 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
 
     setLoading(true);
     try {
+      // 事前チェック：既に登録済みならモーダル表示して終了
+      try {
+        const r0 = await apiFetch(
+          `/api/auth/check?phone=${encodeURIComponent(normalized)}`,
+          { cache: "no-store", lockUI: false }
+        );
+        const j0 = await r0.json().catch(() => ({}));
+        if (r0.ok && j0?.exists) {
+          setAlreadyExistsOpen(true);
+          return;
+        }
+      } catch {}
+
       const r = await apiFetch(`/api/auth/register`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -166,6 +182,12 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       // ★ 成功判定を新旧レスポンス両対応に
       const isOk =
         r.ok && (j?.ok === true || typeof j?.created !== "undefined");
+
+      // 既存番号だった場合はモーダルで案内し、Welcomeへ戻す
+      if (isOk && (j?.created === false || j?.exists === true)) {
+        setAlreadyExistsOpen(true);
+        return;
+      }
 
       if (isOk) {
         localStorage.setItem(PHONE_KEY, normalized);
@@ -202,6 +224,22 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 既存登録モーダル */}
+          <ConfirmModal
+            open={alreadyExistsOpen}
+            onOpenChange={setAlreadyExistsOpen}
+            title="Already Registered"
+            description="This number is already registered, please log in."
+            confirmLabel="OK"
+            cancelLabel=""
+            onConfirm={() => {
+              setAlreadyExistsOpen(false);
+              setMode("home");
+              setError(null);
+              setPhone("");
+            }}
+          />
+
           {flash && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {flash}
@@ -257,7 +295,11 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
                 <Button
                   className="h-11 flex-1"
                   disabled={loading || !isValidPhone(phone)}
-                  onClick={mode === "login" ? doLogin : doRegister}
+                  onClick={
+                    mode === "login"
+                      ? doLogin
+                      : () => setConfirmRegisterOpen(true)
+                  }
                 >
                   {loading
                     ? "Loading..."
@@ -280,6 +322,27 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Register 実行前の確認モーダル（電話番号の最終確認） */}
+      <ConfirmModal
+        open={confirmRegisterOpen}
+        onOpenChange={setConfirmRegisterOpen}
+        title="Double check your phone number"
+        description="Is this correct?"
+        confirmLabel="OK"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          setConfirmRegisterOpen(false);
+          void doRegister();
+        }}
+      >
+        <div className="rounded-md border p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm">Phone</span>
+            <span className="font-semibold">{phone}</span>
+          </div>
+        </div>
+      </ConfirmModal>
     </div>
   );
 }

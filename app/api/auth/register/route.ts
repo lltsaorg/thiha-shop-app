@@ -64,9 +64,15 @@ export async function POST(req: Request) {
     }
 
     if (existing) {
-      // 既に登録済み → そのまま balance を返す
+      // 既に登録済み → そのまま balance を返す（created=false/exists=true を付与）
       return NextResponse.json(
-        { ok: true, phone, balance: Number(existing.balance ?? 0) },
+        {
+          ok: true,
+          phone,
+          balance: Number(existing.balance ?? 0),
+          created: false,
+          exists: true,
+        },
         { status: 200 }
       );
     }
@@ -84,7 +90,7 @@ export async function POST(req: Request) {
           );
         if (upsertErr) throw new Error(upsertErr.message);
         return NextResponse.json(
-          { ok: true, phone, balance: 0 },
+          { ok: true, phone, balance: 0, created: true },
           { status: 200 }
         );
       });
