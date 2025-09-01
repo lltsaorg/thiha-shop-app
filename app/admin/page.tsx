@@ -79,6 +79,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("charge");
   const [notification, setNotification] = useState("");
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editError, setEditError] = useState("");
   const [newProduct, setNewProduct] = useState({ name: "", price: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -272,16 +273,24 @@ export default function AdminPage() {
 
   // 編集
   const handleEditProduct = async (product: any) => {
+    // 価格は文字列入力を許容しているため、送信時に検証・数値化
+    const priceText = String(product.price ?? "").trim();
+    const priceNum = Number(priceText);
+    if (!priceText || !Number.isFinite(priceNum)) {
+      setEditError("価格を入力してください");
+      return;
+    }
     try {
       const response = await apiFetch(`/api/products/${product.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: product.name, price: product.price }),
+        body: JSON.stringify({ name: product.name, price: priceNum }),
       });
       const result = await response.json();
       if (result.success) {
         await refetchProducts();
         setEditingProduct(null);
+        setEditError("");
         setNotification("商品を更新しました");
         setTimeout(() => setNotification(""), 3000);
         // 他タブ（購入画面など）へ商品変更を通知（SWR再取得を促す）
@@ -732,7 +741,14 @@ export default function AdminPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setEditingProduct(product)}
+                                onClick={() => {
+                                  setEditError("");
+                                  setEditingProduct({
+                                    ...product,
+                                    // 価格編集時は空文字も許容するため文字列で保持
+                                    price: String(product.price),
+                                  });
+                                }}
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
@@ -763,7 +779,10 @@ export default function AdminPage() {
               <Dialog
                 open={!!editingProduct}
                 onOpenChange={(open) => {
-                  if (!open) setEditingProduct(null);
+                  if (!open) {
+                    setEditingProduct(null);
+                    setEditError("");
+                  }
                 }}
               >
                 <DialogContent>
@@ -793,13 +812,19 @@ export default function AdminPage() {
                           id="edit-price"
                           type="number"
                           value={editingProduct.price}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const v = e.target.value;
                             setEditingProduct((prev: any) => ({
                               ...prev,
-                              price: Number(e.target.value),
-                            }))
-                          }
+                              // 空欄入力を許容するため数値変換しない
+                              price: v,
+                            }));
+                            if ((v ?? "").trim() !== "") setEditError("");
+                          }}
                         />
+                        {editError && (
+                          <p className="text-sm text-destructive mt-1">{editError}</p>
+                        )}
                       </div>
 
                       <Button
