@@ -541,11 +541,11 @@ export default function PurchasePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Time</span>
-                  <span className="text-sm">{purchaseData.timestamp}</span>
+                  <span className="font-bold">{purchaseData.timestamp}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
                   <span className="text-sm text-muted-foreground">Balance</span>
-                  <span className="font-semibold text-primary">
+                  <span className="font-semibold">
                     {purchaseData.remainingBalance.toLocaleString()}ks
                   </span>
                 </div>
@@ -725,10 +725,6 @@ export default function PurchasePage() {
                   }}
                 >
                   <div className="rounded-md border p-3">
-                    <div className="text-sm font-small mb-2">
-                      Selected Items
-                    </div>
-
                     <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                       {getSelectedProductsList().map((it: any) => (
                         <div
@@ -760,9 +756,6 @@ export default function PurchasePage() {
                       <span className="text-lg font-bold">
                         {getTotalPrice().toLocaleString()}ks
                       </span>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Balance: {balance.toLocaleString()}ks
                     </div>
                   </div>
                 </ConfirmModal>

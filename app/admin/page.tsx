@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import useSWR, { useSWRConfig } from "swr";
+import { useSWRConfig } from "swr";
 import useSWRImmutable from "swr/immutable";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetcher } from "@/lib/fetcher";
@@ -52,26 +52,7 @@ type AdminChargeRequest = {
 // 数字だけに正規化
 const normalizePhone = (p?: string) => (p ?? "").replace(/\D/g, "");
 
-// 1行の現在残高セル
-function BalanceCell({ phone, initial }: { phone: string; initial?: number }) {
-  if (typeof initial === "number" && Number.isFinite(initial)) {
-    return <>{initial.toLocaleString()}ks</>;
-  }
-  const normalized = normalizePhone(phone);
-  const key = normalized
-    ? `/api/balance?phone=${encodeURIComponent(normalized)}`
-    : null;
-  const { data } = useSWR(
-    key,
-    (u) => apiFetch(u!, { lockUI: false }).then((r) => r.json()),
-    {
-      revalidateOnFocus: true,
-      dedupingInterval: 4000,
-    }
-  );
-  const bal = data?.exists ? Number(data.balance) : 0;
-  return <>{(Number.isFinite(bal) ? bal : 0).toLocaleString()}ks</>;
-}
+// 現在残高表示は不要になったため削除（以前の BalanceCell を撤去）
 
 export default function AdminPage() {
   const { mutate } = useSWRConfig();
@@ -102,7 +83,6 @@ export default function AdminPage() {
   const [crLoaded, setCrLoaded] = useState(false);
   const [loadingCR, setLoadingCR] = useState(false);
   const [crDirty, setCrDirty] = useState(false);
-  
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
     list.map((r: any) => ({
@@ -143,7 +123,6 @@ export default function AdminPage() {
       } finally {
         setLoadingCR(false);
         setCrLoaded(true);
-        
       }
     },
     [loadingCR, crOffset, PAGE_SIZE]
@@ -501,6 +480,9 @@ export default function AdminPage() {
                                     <span className="font-semibold">
                                       {request.phone}
                                     </span>
+                                    <span className="text-sm text-muted-foreground font-semibold">
+                                      ID: {request.id}
+                                    </span>
                                     <Badge
                                       variant="secondary"
                                       className="bg-primary/10 text-primary"
@@ -508,17 +490,14 @@ export default function AdminPage() {
                                       承認待ち
                                     </Badge>
                                   </div>
-                                  <div className="text-sm text-muted-foreground">
+                                  <div className="text-sm font-semibold text-muted-foreground">
                                     チャージ額:{" "}
-                                    {request.amount.toLocaleString()}ks |
-                                    現在残高:{" "}
-                                    <BalanceCell
-                                      phone={request.phone}
-                                      initial={request.currentBalance}
-                                    />
+                                    {request.amount.toLocaleString()}ks
                                   </div>
                                   <div className="text-xs text-muted-foreground">
-                                    {formatYGNMinute(request.requested_at)}
+                                    <span className="text-sm font-semibold">
+                                      {formatYGNMinute(request.requested_at)}
+                                    </span>
                                   </div>
                                 </div>
                                 <Button
@@ -574,6 +553,9 @@ export default function AdminPage() {
                                     <span className="font-semibold">
                                       {request.phone}
                                     </span>
+                                    <span className="text-sm text-muted-foreground font-semibold">
+                                      ID: {request.id}
+                                    </span>
                                     {request.approved ? (
                                       <Badge
                                         variant="secondary"
@@ -592,16 +574,11 @@ export default function AdminPage() {
                                   </div>
                                   <div className="text-sm text-muted-foreground">
                                     チャージ額:{" "}
-                                    {request.amount.toLocaleString()}ks |
-                                    現在残高:{" "}
-                                    <BalanceCell
-                                      phone={request.phone}
-                                      initial={request.currentBalance}
-                                    />
+                                    {request.amount.toLocaleString()}ks
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     リクエスト:{" "}
-                                    {formatYGNMinute(request.requested_at)} |{" "}
+                                    {formatYGNMinute(request.requested_at)} |
                                     承認:{" "}
                                     {request.approved
                                       ? formatYGNMinute(request.approved_at)
@@ -822,7 +799,9 @@ export default function AdminPage() {
                           }}
                         />
                         {editError && (
-                          <p className="text-sm text-destructive mt-1">{editError}</p>
+                          <p className="text-sm text-destructive mt-1">
+                            {editError}
+                          </p>
                         )}
                       </div>
 

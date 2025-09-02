@@ -104,9 +104,21 @@ export default function ChargePage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Request ID
+                  </span>
+                  <span className="font-semibold">{requestData.requestId}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Amount</span>
                   <span className="font-semibold">
                     {requestData.amount.toLocaleString()}ks
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Time</span>
+                  <span className="text-sm font-semibold">
+                    {requestData.timestamp}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -117,16 +129,6 @@ export default function ChargePage() {
                   >
                     Pending
                   </Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Time</span>
-                  <span className="text-sm">{requestData.timestamp}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Request ID
-                  </span>
-                  <span className="font-semibold">{requestData.requestId}</span>
                 </div>
               </div>
 
