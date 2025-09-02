@@ -24,6 +24,19 @@ export async function findUserByPhone(phone: string) {
   return data;
 }
 
+// Lighter variant when only the user id is needed
+export async function findUserIdByPhone(
+  phone: string
+): Promise<string | number | null> {
+  const { data, error } = await supabase
+    .from('Users')
+    .select('id')
+    .eq('phone_number', phone)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.id as any) ?? null;
+}
+
 export async function getBalanceFast(phone: string) {
   return cached<{
     exists: boolean;

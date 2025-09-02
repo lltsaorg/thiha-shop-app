@@ -1,7 +1,7 @@
 // app/api/me/charge-requests/route.ts
 export const runtime = "nodejs";
 
-import { supabase, findUserByPhone } from "@/lib/db";
+import { supabase, findUserIdByPhone } from "@/lib/db";
 import { json } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -21,14 +21,13 @@ export async function GET(req: Request) {
     );
     const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
 
-    const user = await findUserByPhone(phone);
-    if (!user) return json({ items: [] });
-    const userId = user.id as any;
+    const userId = await findUserIdByPhone(phone);
+    if (!userId) return json({ items: [] });
 
     let query = supabase
       .from("ChargeRequests")
       .select(
-        "id,user_id,amount,approved,requested_at,approved_at"
+        "id,amount,approved,requested_at,approved_at"
       )
       .eq("user_id", userId)
       .order("requested_at", { ascending: false, nullsFirst: false })
@@ -52,4 +51,3 @@ export async function GET(req: Request) {
     return json({ error: e?.message ?? "failed" }, 500);
   }
 }
-

@@ -1,5 +1,5 @@
 // /app/api/purchase/route.ts
-import { findUserByPhone, supabase, invalidateBalanceCache } from "@/lib/db";
+import { findUserIdByPhone, supabase, invalidateBalanceCache } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
 import { PurchaseSchema } from "@/lib/validators";
 import { json, nowISO } from "@/lib/utils";
@@ -13,9 +13,8 @@ export async function POST(req: Request) {
   const { phone, items } = parsed.data;
 
   // ユーザーが存在しない場合は購入を拒否
-  const u = await findUserByPhone(phone);
-  if (!u) return json({ error: "unknown phone" }, 400);
-  const userId = u.id as any;
+  const userId = await findUserIdByPhone(phone);
+  if (!userId) return json({ error: "unknown phone" }, 400);
 
   // フロント計算を採用 → quantity/total_amount に正規化
   const normalized = items.map((it) => ({

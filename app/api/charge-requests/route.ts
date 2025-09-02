@@ -1,7 +1,7 @@
 // app/api/charge-requests/route.ts
 export const runtime = "nodejs";
 
-import { supabase, invalidateBalanceCache, findUserByPhone } from "@/lib/db";
+import { supabase, invalidateBalanceCache, findUserIdByPhone } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
 import { ChargeRequestSchema } from "@/lib/validators";
 import { json, nowISO } from "@/lib/utils";
@@ -58,8 +58,8 @@ export async function POST(req: Request) {
   if (!parsed.success) return json({ error: parsed.error.format() }, 400);
   const { phone, amount } = parsed.data;
 
-  const found = await findUserByPhone(phone);
-  let userId: string | number | undefined = (found?.id as any) ?? undefined;
+  const foundId = await findUserIdByPhone(phone);
+  let userId: string | number | undefined = (foundId as any) ?? undefined;
   if (!userId) {
     const { data: newUser, error: userErr } = await supabase
       .from("Users")
