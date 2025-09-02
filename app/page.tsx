@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useState, useEffect, useMemo } from "react";
+import { useSelectedItems, type SelectedItem } from "@/components/SelectedItemsProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSavedPhone } from "@/lib/client-auth";
@@ -45,15 +46,13 @@ const supabaseBrowser = createClient(
 
 type Product = { id: number; name: string; price: number };
 // ✅ 修正点：選択済みは product オブジェクト＋Qtyで保持（編集/削除しやすく）
-type SelectedProduct = { id: string; product: Product; quantity: number };
+type SelectedProduct = SelectedItem;
 
 export default function PurchasePage() {
   const { mutate } = useSWRConfig();
 
   // ====== 修正点：モーダル方式のための state 追加 ======
-  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>(
-    []
-  );
+  const { items: selectedProducts, setItems: setSelectedProducts } = useSelectedItems();
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,6 +82,8 @@ export default function PurchasePage() {
   useEffect(() => {
     setPhone(getSavedPhone() ?? null);
   }, []);
+
+  // Using shared context for selection; no localStorage persistence
 
   // BroadcastChannel でログイン完了を検知
   useEffect(() => {
