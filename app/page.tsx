@@ -77,6 +77,13 @@ export default function PurchasePage() {
   const [pLoading, setPLoading] = useState(false);
   const [pLoaded, setPLoaded] = useState(false);
   const [purchases, setPurchases] = useState<any[]>([]);
+  // 履歴：購入日時単位での詳細モーダル用
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
+  const [purchaseModalData, setPurchaseModalData] = useState<{
+    created_at: string;
+    items: any[];
+    total: number;
+  } | null>(null);
 
   // 電話番号は state に保持（BalanceGuard がゲート表示を担当）
   useEffect(() => {
@@ -177,6 +184,36 @@ export default function PurchasePage() {
     } finally {
       setPLoading(false);
     }
+  };
+
+  // 購入日時単位でグルーピング
+  const groupedPurchases = useMemo(() => {
+    if (!Array.isArray(purchases) || purchases.length === 0) return [] as {
+      created_at: string;
+      items: any[];
+      total: number;
+    }[];
+    const map = new Map<string, { created_at: string; items: any[]; total: number }>();
+    for (const t of purchases) {
+      const key = t.created_at;
+      const entry = map.get(key) ?? { created_at: key, items: [] as any[], total: 0 };
+      entry.items.push(t);
+      entry.total += Number(t.total_amount || 0);
+      map.set(key, entry);
+    }
+    // created_at 降順に並べ替え
+    return Array.from(map.values()).sort((a, b) =>
+      String(b.created_at).localeCompare(String(a.created_at))
+    );
+  }, [purchases]);
+
+  const openPurchaseDetail = (g: { created_at: string; items: any[]; total: number }) => {
+    setPurchaseModalData(g);
+    setPurchaseModalOpen(true);
+  };
+  const closePurchaseDetail = () => {
+    setPurchaseModalOpen(false);
+    setPurchaseModalData(null);
   };
 
   // /api/products
@@ -831,23 +868,31 @@ export default function PurchasePage() {
                         <div className="flex justify-end">
                           <Button variant="outline" size="sm" onClick={loadPurchases} disabled={pLoading}>Reload</Button>
                         </div>
-                        {purchases.length === 0 ? (
+                        {groupedPurchases.length === 0 ? (
                           <div className="text-center py-6 text-muted-foreground">No purchases</div>
                         ) : (
                           <div className="grid grid-cols-1 gap-3">
-                            {purchases.map((t: any) => (
-                              <Card key={t.id} className="py-2 gap-2">
-                                <CardContent className="p-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="space-y-1">
-                                      <div className="font-medium break-words leading-tight">{t.product_name || `#${t.product_id}`}</div>
-                                      <div className="text-sm text-muted-foreground">Qty: {Number(t.quantity)} / Amount: {Number(t.total_amount).toLocaleString()}ks</div>
-                                      <div className="text-xs text-muted-foreground">{formatYGNMinute(t.created_at)}</div>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
+                            {groupedPurchases.map((g: any) => {
+                              const itemCount = g.items.length;
+                              return (
+                                <button key={g.created_at} onClick={() => openPurchaseDetail(g)} className="text-left">
+                                  <Card className="py-2 gap-2 hover:border-primary/60 transition-colors">
+                                    <CardContent className="p-3">
+                                      <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                          <div className="font-medium break-words leading-tight">
+                                            {formatYGNMinute(g.created_at)}
+                                          </div>
+                                          <div className="text-sm text-muted-foreground">
+                                            Items: {itemCount} / Total: {Number(g.total).toLocaleString()}ks
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -856,6 +901,48 @@ export default function PurchasePage() {
                 </Tabs>
               </CardContent>
             </Card>
+            {/* 購入詳細モーダル（購入証明画面に類似） */}
+            <Dialog open={purchaseModalOpen} onOpenChange={(o) => (o ? void 0 : closePurchaseDetail())}>
+              <DialogContent className="max-w-md w-[calc(100%-24px)] p-0 overflow-hidden">
+                <div className="p-4 border-b">
+                  <DialogHeader>
+                    <DialogTitle>Purchase Detail</DialogTitle>
+                  </DialogHeader>
+                </div>
+                <div className="p-4 space-y-4">
+                  {purchaseModalData ? (
+                    <div className="bg-muted p-4 rounded-lg space-y-3">
+                      {purchaseModalData.items.map((it: any, idx: number) => (
+                        <div key={idx} className="flex justify-between">
+                          <span className="text-sm">
+                            {(it.product_name || `#${it.product_id}`)} × {Number(it.quantity)}
+                          </span>
+                          <span className="font-semibold">
+                            {Number(it.total_amount).toLocaleString()}ks
+                          </span>
+                        </div>
+                      ))}
+                      <div className="border-t pt-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Total</span>
+                          <span className="font-bold text-lg">{Number(purchaseModalData.total).toLocaleString()}ks</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Time</span>
+                        <span className="text-sm">{formatYGNMinute(purchaseModalData.created_at)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">No data</div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={closePurchaseDetail}>Close</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </main>
 
