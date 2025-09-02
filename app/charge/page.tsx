@@ -233,7 +233,7 @@ export default function ChargePage() {
               <ConfirmModal
                 open={confirmOpen}
                 onOpenChange={setConfirmOpen}
-                title="Confirm Amount"
+                title="Double Check"
                 description="Please check amount. OK?"
                 confirmLabel="Request"
                 cancelLabel="Cancel"
