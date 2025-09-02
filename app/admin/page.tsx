@@ -102,7 +102,7 @@ export default function AdminPage() {
   const [crLoaded, setCrLoaded] = useState(false);
   const [loadingCR, setLoadingCR] = useState(false);
   const [crDirty, setCrDirty] = useState(false);
-  const [lastCrLoadAt, setLastCrLoadAt] = useState<number>(0);
+  
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
     list.map((r: any) => ({
@@ -143,7 +143,7 @@ export default function AdminPage() {
       } finally {
         setLoadingCR(false);
         setCrLoaded(true);
-        setLastCrLoadAt(Date.now());
+        
       }
     },
     [loadingCR, crOffset, PAGE_SIZE]
@@ -188,13 +188,12 @@ export default function AdminPage() {
     return () => bc.removeEventListener("message", onMsg);
   }, [mutate, loadChargeRequests, activeTab]);
 
-  // フォーカス/可視化時に最新化（低コスト：必要時のみ）
+  // フォーカス/可視化時に最新化（変更があった場合のみ）
   useEffect(() => {
     const maybeRefresh = () => {
       if (activeTab !== "charge") return;
-      const now = Date.now();
-      const stale = now - lastCrLoadAt > 5000; // 5秒以上経過で再取得
-      if (crDirty || stale) {
+      // BroadcastChannel などで変更が検知された場合のみ再取得
+      if (crDirty) {
         loadChargeRequests({ reset: true });
         setCrDirty(false);
       }
@@ -205,7 +204,7 @@ export default function AdminPage() {
       window.removeEventListener("focus", maybeRefresh);
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
-  }, [activeTab, crDirty, lastCrLoadAt, loadChargeRequests]);
+  }, [activeTab, crDirty, loadChargeRequests]);
 
   // products 整形
   const products: any[] = (

@@ -22,7 +22,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useState, useEffect, useMemo } from "react";
-import { useSelectedItems, type SelectedItem } from "@/components/SelectedItemsProvider";
+import {
+  useSelectedItems,
+  type SelectedItem,
+} from "@/components/SelectedItemsProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSavedPhone } from "@/lib/client-auth";
@@ -52,7 +55,8 @@ export default function PurchasePage() {
   const { mutate } = useSWRConfig();
 
   // ====== 修正点：モーダル方式のための state 追加 ======
-  const { items: selectedProducts, setItems: setSelectedProducts } = useSelectedItems();
+  const { items: selectedProducts, setItems: setSelectedProducts } =
+    useSelectedItems();
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -150,7 +154,9 @@ export default function PurchasePage() {
     setCrLoading(true);
     try {
       const res = await apiFetch(
-        `/api/me/charge-requests?phone=${encodeURIComponent(normalizedPhone)}&status=all&limit=100`,
+        `/api/me/charge-requests?phone=${encodeURIComponent(
+          normalizedPhone
+        )}&status=all&limit=100`,
         { lockUI: false }
       );
       const json = await res.json().catch(() => ({}));
@@ -172,7 +178,9 @@ export default function PurchasePage() {
     setPLoading(true);
     try {
       const res = await apiFetch(
-        `/api/me/purchases?phone=${encodeURIComponent(normalizedPhone)}&limit=100`,
+        `/api/me/purchases?phone=${encodeURIComponent(
+          normalizedPhone
+        )}&limit=100`,
         { lockUI: false }
       );
       const json = await res.json().catch(() => ({}));
@@ -188,15 +196,23 @@ export default function PurchasePage() {
 
   // 購入日時単位でグルーピング
   const groupedPurchases = useMemo(() => {
-    if (!Array.isArray(purchases) || purchases.length === 0) return [] as {
-      created_at: string;
-      items: any[];
-      total: number;
-    }[];
-    const map = new Map<string, { created_at: string; items: any[]; total: number }>();
+    if (!Array.isArray(purchases) || purchases.length === 0)
+      return [] as {
+        created_at: string;
+        items: any[];
+        total: number;
+      }[];
+    const map = new Map<
+      string,
+      { created_at: string; items: any[]; total: number }
+    >();
     for (const t of purchases) {
       const key = t.created_at;
-      const entry = map.get(key) ?? { created_at: key, items: [] as any[], total: 0 };
+      const entry = map.get(key) ?? {
+        created_at: key,
+        items: [] as any[],
+        total: 0,
+      };
       entry.items.push(t);
       entry.total += Number(t.total_amount || 0);
       map.set(key, entry);
@@ -207,7 +223,11 @@ export default function PurchasePage() {
     );
   }, [purchases]);
 
-  const openPurchaseDetail = (g: { created_at: string; items: any[]; total: number }) => {
+  const openPurchaseDetail = (g: {
+    created_at: string;
+    items: any[];
+    total: number;
+  }) => {
     setPurchaseModalData(g);
     setPurchaseModalOpen(true);
   };
@@ -342,7 +362,8 @@ export default function PurchasePage() {
       if (existing) {
         // 既存選択の編集時も最新の products から取得してモーダルに反映
         const latest =
-          products.find((p) => p.id === existing.product.id) || existing.product;
+          products.find((p) => p.id === existing.product.id) ||
+          existing.product;
         setSelectedProductInModal(latest);
         setQuantityInModal(existing.quantity);
         setEditingProductId(editId);
@@ -694,7 +715,7 @@ export default function PurchasePage() {
                 <ConfirmModal
                   open={confirmOpen}
                   onOpenChange={setConfirmOpen}
-                  title="Confirm Purchase"
+                  title="Double Check"
                   description="Please check selected items. OK?"
                   confirmLabel="Purchase"
                   cancelLabel="Cancel"
@@ -788,38 +809,71 @@ export default function PurchasePage() {
                   <TabsContent value="cr" className="mt-4">
                     {!crLoaded ? (
                       <div className="flex flex-col items-center gap-3 py-4">
-                        <p className="text-sm text-muted-foreground">Tap to load</p>
-                        <Button onClick={loadChargeHistory} disabled={!normalizedPhone || crLoading}>
+                        <p className="text-sm text-muted-foreground">
+                          Tap to load
+                        </p>
+                        <Button
+                          onClick={loadChargeHistory}
+                          disabled={!normalizedPhone || crLoading}
+                        >
                           {crLoading ? "Loading..." : "Load Requests"}
                         </Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
                         <div className="flex justify-end">
-                          <Button variant="outline" size="sm" onClick={loadChargeHistory} disabled={crLoading}>Reload</Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={loadChargeHistory}
+                            disabled={crLoading}
+                          >
+                            Reload
+                          </Button>
                         </div>
                         <Tabs defaultValue="pending" className="w-full">
                           <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="pending">Pending ({crPending.length})</TabsTrigger>
-                            <TabsTrigger value="approved">Approved ({crApproved.length})</TabsTrigger>
+                            <TabsTrigger value="pending">
+                              Pending ({crPending.length})
+                            </TabsTrigger>
+                            <TabsTrigger value="approved">
+                              Approved ({crApproved.length})
+                            </TabsTrigger>
                           </TabsList>
                           <TabsContent value="pending" className="mt-4">
                             {crPending.length === 0 ? (
                               <div className="space-y-2">
-                                <div className="text-center py-6 text-muted-foreground">No pending</div>
+                                <div className="text-center py-6 text-muted-foreground">
+                                  No pending
+                                </div>
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 gap-3">
                                 {crPending.map((r: any) => (
-                                  <Card key={r.id} className="py-2 gap-2 border-2 border-primary/20">
+                                  <Card
+                                    key={r.id}
+                                    className="py-2 gap-2 border-2 border-primary/20"
+                                  >
                                     <CardContent className="p-3">
                                       <div className="flex items-center justify-between">
                                         <div className="space-y-1">
                                           <div className="flex items-center gap-2">
-                                            <Badge variant="secondary" className="bg-primary/10 text-primary">Pending</Badge>
+                                            <Badge
+                                              variant="secondary"
+                                              className="bg-primary/10 text-primary"
+                                            >
+                                              Pending
+                                            </Badge>
                                           </div>
-                                          <div className="text-sm text-muted-foreground">Amount: {Number(r.amount).toLocaleString()}ks</div>
-                                          <div className="text-xs text-muted-foreground">Requested: {formatYGNMinute(r.requested_at)}</div>
+                                          <div className="text-sm text-muted-foreground">
+                                            Amount:{" "}
+                                            {Number(r.amount).toLocaleString()}
+                                            ks
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            Requested:{" "}
+                                            {formatYGNMinute(r.requested_at)}
+                                          </div>
                                         </div>
                                       </div>
                                     </CardContent>
@@ -831,7 +885,9 @@ export default function PurchasePage() {
                           <TabsContent value="approved" className="mt-4">
                             {crApproved.length === 0 ? (
                               <div className="space-y-2">
-                                <div className="text-center py-6 text-muted-foreground">No approved</div>
+                                <div className="text-center py-6 text-muted-foreground">
+                                  No approved
+                                </div>
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 gap-3">
@@ -839,9 +895,24 @@ export default function PurchasePage() {
                                   <Card key={r.id} className="py-2 gap-2">
                                     <CardContent className="p-3">
                                       <div className="space-y-1">
-                                        <div className="flex items-center gap-2"><Badge variant="secondary" className="bg-green-100 text-green-800">Approved</Badge></div>
-                                        <div className="text-sm text-muted-foreground">Amount: {Number(r.amount).toLocaleString()}ks</div>
-                                        <div className="text-xs text-muted-foreground">Requested: {formatYGNMinute(r.requested_at)} | Approved: {formatYGNMinute(r.approved_at)}</div>
+                                        <div className="flex items-center gap-2">
+                                          <Badge
+                                            variant="secondary"
+                                            className="bg-green-100 text-green-800"
+                                          >
+                                            Approved
+                                          </Badge>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                          Amount:{" "}
+                                          {Number(r.amount).toLocaleString()}ks
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Requested:{" "}
+                                          {formatYGNMinute(r.requested_at)} |
+                                          Approved:{" "}
+                                          {formatYGNMinute(r.approved_at)}
+                                        </div>
                                       </div>
                                     </CardContent>
                                   </Card>
@@ -858,24 +929,42 @@ export default function PurchasePage() {
                   <TabsContent value="purchase" className="mt-4">
                     {!pLoaded ? (
                       <div className="flex flex-col items-center gap-3 py-4">
-                        <p className="text-sm text-muted-foreground">Tap to load</p>
-                        <Button onClick={loadPurchases} disabled={!normalizedPhone || pLoading}>
+                        <p className="text-sm text-muted-foreground">
+                          Tap to load
+                        </p>
+                        <Button
+                          onClick={loadPurchases}
+                          disabled={!normalizedPhone || pLoading}
+                        >
                           {pLoading ? "Loading..." : "Load Purchases"}
                         </Button>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         <div className="flex justify-end">
-                          <Button variant="outline" size="sm" onClick={loadPurchases} disabled={pLoading}>Reload</Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={loadPurchases}
+                            disabled={pLoading}
+                          >
+                            Reload
+                          </Button>
                         </div>
                         {groupedPurchases.length === 0 ? (
-                          <div className="text-center py-6 text-muted-foreground">No purchases</div>
+                          <div className="text-center py-6 text-muted-foreground">
+                            No purchases
+                          </div>
                         ) : (
                           <div className="grid grid-cols-1 gap-3">
                             {groupedPurchases.map((g: any) => {
                               const itemCount = g.items.length;
                               return (
-                                <button key={g.created_at} onClick={() => openPurchaseDetail(g)} className="text-left">
+                                <button
+                                  key={g.created_at}
+                                  onClick={() => openPurchaseDetail(g)}
+                                  className="text-left"
+                                >
                                   <Card className="py-2 gap-2 hover:border-primary/60 transition-colors">
                                     <CardContent className="p-3">
                                       <div className="flex items-center justify-between">
@@ -884,7 +973,8 @@ export default function PurchasePage() {
                                             {formatYGNMinute(g.created_at)}
                                           </div>
                                           <div className="text-sm text-muted-foreground">
-                                            Items: {itemCount} / Total: {Number(g.total).toLocaleString()}ks
+                                            Items: {itemCount} / Total:{" "}
+                                            {Number(g.total).toLocaleString()}ks
                                           </div>
                                         </div>
                                       </div>
@@ -902,7 +992,10 @@ export default function PurchasePage() {
               </CardContent>
             </Card>
             {/* 購入詳細モーダル（購入証明画面に類似） */}
-            <Dialog open={purchaseModalOpen} onOpenChange={(o) => (o ? void 0 : closePurchaseDetail())}>
+            <Dialog
+              open={purchaseModalOpen}
+              onOpenChange={(o) => (o ? void 0 : closePurchaseDetail())}
+            >
               <DialogContent className="max-w-md w-[calc(100%-24px)] p-0 overflow-hidden">
                 <div className="p-4 border-b">
                   <DialogHeader>
@@ -915,7 +1008,8 @@ export default function PurchasePage() {
                       {purchaseModalData.items.map((it: any, idx: number) => (
                         <div key={idx} className="flex justify-between">
                           <span className="text-sm">
-                            {(it.product_name || `#${it.product_id}`)} × {Number(it.quantity)}
+                            {it.product_name || `#${it.product_id}`} ×{" "}
+                            {Number(it.quantity)}
                           </span>
                           <span className="font-semibold">
                             {Number(it.total_amount).toLocaleString()}ks
@@ -924,21 +1018,37 @@ export default function PurchasePage() {
                       ))}
                       <div className="border-t pt-2">
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Total</span>
-                          <span className="font-bold text-lg">{Number(purchaseModalData.total).toLocaleString()}ks</span>
+                          <span className="text-sm text-muted-foreground">
+                            Total
+                          </span>
+                          <span className="font-bold text-lg">
+                            {Number(purchaseModalData.total).toLocaleString()}ks
+                          </span>
                         </div>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Time</span>
-                        <span className="text-sm">{formatYGNMinute(purchaseModalData.created_at)}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Time
+                        </span>
+                        <span className="text-sm">
+                          {formatYGNMinute(purchaseModalData.created_at)}
+                        </span>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center text-muted-foreground py-4">No data</div>
+                    <div className="text-center text-muted-foreground py-4">
+                      No data
+                    </div>
                   )}
 
                   <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1" onClick={closePurchaseDetail}>Close</Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={closePurchaseDetail}
+                    >
+                      Close
+                    </Button>
                   </div>
                 </div>
               </DialogContent>
