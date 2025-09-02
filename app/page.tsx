@@ -292,13 +292,23 @@ export default function PurchasePage() {
     return () => bc.removeEventListener("message", onMsg);
   }, [mutate, balanceKey, normalizedPhone]);
 
-  // ====== 修正点：検索対象のフィルタリング ======
+  // ====== 修正点：検索対象のフィルタリング（選択済みを除外） ======
   const filteredProducts: Product[] = useMemo(() => {
-    if (!searchQuery.trim()) return products;
-    return products.filter((product) =>
-      product.name.toLowerCase().includes(searchQuery.toLowerCase())
+    // 既に選択済みの product.id を除外
+    const selectedIds = new Set(
+      (selectedProducts || []).map((row) => row.product.id)
     );
-  }, [products, searchQuery]);
+
+    // 検索語が空の時は全件をベースにする（UI上はリストを表示しないが整合のため）
+    const base = !searchQuery.trim()
+      ? products
+      : products.filter((product) =>
+          product.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+    // 既に選択済みのアイテムは結果から除外
+    return base.filter((p) => !selectedIds.has(p.id));
+  }, [products, searchQuery, selectedProducts]);
   // ====== /修正点 ======
 
   // 選択済み商品の商品名・価格を最新の products に追従させる（API増加なし、リアルタイム追加なし）
