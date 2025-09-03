@@ -904,14 +904,17 @@ export default function PurchasePage() {
                                     <CardContent className="p-3">
                                       <div className="flex items-center justify-between">
                                         <div className="space-y-1">
-                                          <div className="flex items-center gap-2">
-                                            <Badge
-                                              variant="secondary"
-                                              className="bg-primary/10 text-primary"
-                                            >
-                                              Pending
-                                            </Badge>
-                                          </div>
+                                        <div className="flex items-center gap-2">
+                                          <Badge
+                                            variant="secondary"
+                                            className="bg-primary/10 text-primary"
+                                          >
+                                            Pending
+                                          </Badge>
+                                          <span className="text-xs text-muted-foreground font-semibold">
+                                            ID: {r.id}
+                                          </span>
+                                        </div>
                                           <div className="text-sm text-muted-foreground">
                                             Amount:{" "}
                                             {Number(r.amount).toLocaleString()}
@@ -949,6 +952,9 @@ export default function PurchasePage() {
                                           >
                                             Approved
                                           </Badge>
+                                          <span className="text-xs text-muted-foreground font-semibold">
+                                            ID: {r.id}
+                                          </span>
                                         </div>
                                         <div className="text-sm text-muted-foreground">
                                           Amount:{" "}
