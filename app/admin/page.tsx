@@ -491,7 +491,6 @@ export default function AdminPage() {
                   <RefreshCw
                     className={"w-4 h-4 " + (loadingCR ? "animate-spin" : "")}
                   />
-                  <span className="ml-2 hidden sm:inline">更新</span>
                 </Button>
               </div>
             </CardHeader>
