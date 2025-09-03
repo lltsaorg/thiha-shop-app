@@ -13,6 +13,7 @@ type Props = {
 };
 
 const PHONE_KEY = "thiha_phone";
+const MIGRATED_KEY = "thiha_phone_migrated"; // one-time migration flag
 
 /** 電話番号: 国内形式のみ（09で始まり数字のみ・全体8〜11桁） */
 export function isValidPhone(input: string): boolean {
@@ -50,20 +51,32 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
 
     const saved =
       typeof window !== "undefined" ? localStorage.getItem(PHONE_KEY) : null;
+    const migrated =
+      typeof window !== "undefined" ? localStorage.getItem(MIGRATED_KEY) : null;
 
-    if (saved) {
-      // ★ そのまま通す（モーダルは出さない）
-      setOpen(false);
-      onAuthedRef.current(saved, 0);
-
-      // ★ 他タブ/他コンポーネントへもLog In状態を通知
-      new BroadcastChannel("thiha-shop").postMessage({
-        type: "LOGIN_SUCCESS",
-        phone: saved,
-      });
-
+    if (saved && !migrated) {
+      // ★ 一度だけ Cookie へ移行（DBアクセスなし）し、localStorage をクリア
+      fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone: saved }),
+      })
+        .catch(() => {})
+        .finally(() => {
+          try {
+            localStorage.setItem(MIGRATED_KEY, "1");
+            localStorage.removeItem(PHONE_KEY);
+          } catch {}
+          setOpen(false);
+          onAuthedRef.current(saved, 0);
+          new BroadcastChannel("thiha-shop").postMessage({
+            type: "LOGIN_SUCCESS",
+            phone: saved,
+          });
+        });
       // 残高は各画面の SWR が取得・共有するためここでは追加リクエストしない
     } else {
+      // 既に移行済み、または保存なし → モーダル表示（Cookie 無効ならここでログインを促す）
       setOpen(true);
     }
   }, []);
@@ -124,11 +137,18 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       );
       const j = await r.json();
       if (r.ok && j.exists) {
-        localStorage.setItem(PHONE_KEY, normalized);
+        // ★ Cookie セッションを発行（localStorage へは保存しない）
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ phone: normalized }),
+        });
+        try {
+          localStorage.setItem(MIGRATED_KEY, "1");
+          localStorage.removeItem(PHONE_KEY);
+        } catch {}
         setOpen(false);
         onAuthed(normalized, Number(j.balance ?? 0));
-
-        // ★ 購入画面へ即反映（BroadcastChannel で通知）
         new BroadcastChannel("thiha-shop").postMessage({
           type: "LOGIN_SUCCESS",
           phone: normalized,
@@ -190,11 +210,17 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       }
 
       if (isOk) {
-        localStorage.setItem(PHONE_KEY, normalized);
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ phone: normalized }),
+        });
+        try {
+          localStorage.setItem(MIGRATED_KEY, "1");
+          localStorage.removeItem(PHONE_KEY);
+        } catch {}
         setOpen(false);
         onAuthed(normalized, Number(j?.balance ?? 0));
-
-        // ★ 購入画面へ即反映（BroadcastChannel で通知）
         new BroadcastChannel("thiha-shop").postMessage({
           type: "LOGIN_SUCCESS",
           phone: normalized,
@@ -217,7 +243,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
         <CardHeader>
           <CardTitle className="text-lg">
             {mode === "home"
-              ? "Welcome"
+              ? "Welcome, use phone number"
               : mode === "login"
               ? "Log In"
               : "Register"}

@@ -2,7 +2,12 @@ import crypto from "crypto";
 
 const COOKIE_NAME = "ADMIN_GATE";
 
-export const GATE_MAX_AGE_SEC = 60 * 60 * 24 * 7; // 7 days
+const GATE_DEFAULT_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const GATE_ENV_MAX = Number(process.env.APP_GATE_MAX_AGE_SEC);
+export const GATE_MAX_AGE_SEC =
+  Number.isFinite(GATE_ENV_MAX) && GATE_ENV_MAX > 0
+    ? Math.floor(GATE_ENV_MAX)
+    : GATE_DEFAULT_MAX_AGE;
 
 export function getGateCookieName() {
   return COOKIE_NAME;

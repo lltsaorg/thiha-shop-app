@@ -16,14 +16,26 @@ const fetcher = async (u: string) => {
 export type BalanceGuardProps = { children?: React.ReactNode };
 
 export default function BalanceGuard({ children }: BalanceGuardProps) {
-  const [phone, setPhone] = React.useState<string | null>(null);
+  const [authed, setAuthed] = React.useState<boolean | null>(null);
 
+  // Check cookie session
   React.useEffect(() => {
-    setPhone(localStorage.getItem("phone"));
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!cancelled) setAuthed(r.ok);
+      } catch {
+        if (!cancelled) setAuthed(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const { data } = useSWR(
-    phone ? `/api/balance?phone=${encodeURIComponent(phone)}` : null,
+    authed ? `/api/balance` : null,
     fetcher,
     {
       revalidateOnFocus: false,
@@ -34,24 +46,13 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
     }
   );
 
-  // Gate 完了時に phone を保存
-  const handleAuthed = React.useCallback((p: string, _b: number) => {
-    setPhone(p);
+  const handleAuthed = React.useCallback((_p: string, _b: number) => {
+    // After login, recheck session and trigger SWR
+    setAuthed(true);
   }, []);
 
-  new BroadcastChannel("thiha-shop").postMessage({
-    type: "LOGIN_SUCCESS",
-    phone,
-  });
-
-  // 電話番号未設定 → Gate 表示
-  if (!phone) return <LoginRegisterGate onAuthed={handleAuthed} />;
-
-  // DB未登録（/api/balance が {exists:false}）→ Gate 表示
-  if (data && data.exists === false) {
-    return <LoginRegisterGate onAuthed={handleAuthed} />;
-  }
-
-  // 登録済みのみ children を許可
+  if (authed === null) return null; // or a lightweight spinner
+  if (!authed) return <LoginRegisterGate onAuthed={handleAuthed} />;
+  if (data && data.exists === false) return <LoginRegisterGate onAuthed={handleAuthed} />;
   return <>{children}</>;
 }

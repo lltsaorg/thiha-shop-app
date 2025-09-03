@@ -35,7 +35,20 @@ export default function ChargePage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
-    setPhone(getSavedPhone() ?? null);
+    // Prefer cookie session; fallback to legacy localStorage
+    (async () => {
+      try {
+        const r = await fetch("/api/auth/session", { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          if (j?.phone) {
+            setPhone(j.phone);
+            return;
+          }
+        }
+      } catch {}
+      setPhone(getSavedPhone() ?? null);
+    })();
   }, []);
 
   const handleSubmit = async () => {

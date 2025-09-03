@@ -70,8 +70,19 @@ export default function PurchasePage() {
   const [purchaseData, setPurchaseData] = useState<any>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const [insufficientOpen, setInsufficientOpen] = useState(false);
   const router = useRouter();
+  const signOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { cache: "no-store" });
+    } catch {}
+    try {
+      localStorage.removeItem("thiha_phone");
+      localStorage.removeItem("phone");
+    } catch {}
+    window.location.reload();
+  };
 
   // ====== 履歴（手動取得）用の state ======
   const [crLoading, setCrLoading] = useState(false);
@@ -91,7 +102,20 @@ export default function PurchasePage() {
 
   // 電話番号は state に保持（BalanceGuard がゲート表示を担当）
   useEffect(() => {
-    setPhone(getSavedPhone() ?? null);
+    // Prefer cookie session; fallback to legacy localStorage
+    (async () => {
+      try {
+        const r = await fetch("/api/auth/session", { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          if (j?.phone) {
+            setPhone(j.phone);
+            return;
+          }
+        }
+      } catch {}
+      setPhone(getSavedPhone() ?? null);
+    })();
   }, []);
 
   // Using shared context for selection; no localStorage persistence
@@ -583,7 +607,27 @@ export default function PurchasePage() {
       <div className="min-h-screen bg-background">
         <header className="bg-card border-b border-border">
           <div className="max-w-md mx-auto px-4 py-4">
-            <h1 className="text-xl font-black text-center">Thiha Shop App</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-black">Thiha Shop App</h1>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setLogoutOpen(true)}
+                >
+                  Log out
+                </Button>
+                <ConfirmModal
+                  open={logoutOpen}
+                  onOpenChange={setLogoutOpen}
+                  title="Log out?"
+                  description="Go back to login screen."
+                  confirmLabel="OK"
+                  cancelLabel="Cancel"
+                  onConfirm={signOut}
+                />
+              </>
+            </div>
           </div>
         </header>
 
