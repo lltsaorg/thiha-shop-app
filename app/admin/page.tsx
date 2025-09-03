@@ -461,7 +461,7 @@ export default function AdminPage() {
             className="h-16 flex flex-col gap-1"
           >
             <BarChart3 className="w-6 h-6" />
-            <span>売上分析</span>
+            <span>売上データ</span>
           </Button>
         </div>
 
@@ -474,8 +474,11 @@ export default function AdminPage() {
               </CardTitle>
               <div className="flex items-center gap-2">
                 {crDirty && (
-                  <Badge variant="secondary" className="bg-primary/10 text-primary">
-                    更新あり
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary"
+                  >
+                    新規
                   </Badge>
                 )}
                 <Button
@@ -485,7 +488,9 @@ export default function AdminPage() {
                   disabled={loadingCR}
                   aria-busy={loadingCR}
                 >
-                  <RefreshCw className={"w-4 h-4 " + (loadingCR ? "animate-spin" : "")} />
+                  <RefreshCw
+                    className={"w-4 h-4 " + (loadingCR ? "animate-spin" : "")}
+                  />
                   <span className="ml-2 hidden sm:inline">更新</span>
                 </Button>
               </div>
@@ -886,7 +891,7 @@ export default function AdminPage() {
         {activeTab === "analytics" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-black">売上分析</CardTitle>
+              <CardTitle className="text-lg font-black">売上データ</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-center py-8">
