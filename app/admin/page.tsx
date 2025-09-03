@@ -14,6 +14,7 @@ import {
   Trash2,
   Plus,
   Search,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -467,10 +468,27 @@ export default function AdminPage() {
         {/* Charge Request Management（このカード内だけ縦スクロール） */}
         {activeTab === "charge" && (
           <Card className="max-h-[75vh] flex flex-col overflow-hidden">
-            <CardHeader>
+            <CardHeader className="flex items-center justify-between">
               <CardTitle className="text-lg font-black">
                 チャージリクエスト管理
               </CardTitle>
+              <div className="flex items-center gap-2">
+                {crDirty && (
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">
+                    更新あり
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadChargeRequests({ reset: true })}
+                  disabled={loadingCR}
+                  aria-busy={loadingCR}
+                >
+                  <RefreshCw className={"w-4 h-4 " + (loadingCR ? "animate-spin" : "")} />
+                  <span className="ml-2 hidden sm:inline">更新</span>
+                </Button>
+              </div>
             </CardHeader>
 
             {/* ヘッダーを除いた残りの高さを占有。ここでは overflow は隠す */}
