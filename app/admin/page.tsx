@@ -30,6 +30,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatYGNMinute } from "@/lib/utils";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 // Analytics external links from env (client-side)
 const ANALYTICS_SPREADSHEET_URL =
@@ -67,6 +68,7 @@ export default function AdminPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   // 商品は immutable
   const {
@@ -376,8 +378,28 @@ export default function AdminPage() {
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-4">
             <h1 className="text-xl font-black">管理者ダッシュボード</h1>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLogoutOpen(true)}
+              >
+                ログアウト
+              </Button>
+              <ConfirmModal
+                open={logoutOpen}
+                onOpenChange={setLogoutOpen}
+                title="ログアウトの確認"
+                description="パスワード入力画面に戻ります。よろしいですか？"
+                confirmLabel="OK"
+                cancelLabel="キャンセル"
+                onConfirm={() => {
+                  window.location.href = "/api/admin/logout";
+                }}
+              />
+            </>
           </div>
         </div>
       </header>
