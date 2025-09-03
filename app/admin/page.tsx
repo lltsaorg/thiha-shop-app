@@ -152,7 +152,7 @@ export default function AdminPage() {
       }
       if (document.visibilityState !== "visible") return;
       const now = Date.now();
-      if (now - lastFocusSyncRef.current < 5000) return; // 5秒スロットル
+      if (now - lastFocusSyncRef.current < 3000) return; // 3秒スロットル
       lastFocusSyncRef.current = now;
       loadChargeRequests({ reset: true });
     };
