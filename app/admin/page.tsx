@@ -110,7 +110,7 @@ export default function AdminPage() {
       try {
         const res = await apiFetch(
           `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}`,
-          { lockUI: false }
+          { lockUI: false, cache: "no-store" }
         );
         const json = await res.json().catch(() => ({}));
         const raw = Array.isArray(json) ? json : json?.items ?? [];
@@ -139,6 +139,30 @@ export default function AdminPage() {
     loadChargeRequests({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // フォーカス/可視化時に最新化（常に軽く再取得。無駄な再取得は軽くスロットル）
+  const lastFocusSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "charge") return;
+      if (crDirty) {
+        setCrDirty(false);
+        loadChargeRequests({ reset: true });
+        return;
+      }
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastFocusSyncRef.current < 5000) return; // 5秒スロットル
+      lastFocusSyncRef.current = now;
+      loadChargeRequests({ reset: true });
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, crDirty, loadChargeRequests]);
 
   // BroadcastChannel で変更検知
   useEffect(() => {
