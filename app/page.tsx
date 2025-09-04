@@ -169,17 +169,17 @@ export default function PurchasePage() {
   useEffect(() => {
     const maybeRefresh = () => {
       if (!balanceKey) return;
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== "visible") return;
       const now = Date.now();
       if (now - lastFocusSyncRef.current < 3000) return; // 3秒スロットル
       lastFocusSyncRef.current = now;
       mutate(balanceKey);
     };
-    window.addEventListener('focus', maybeRefresh);
-    document.addEventListener('visibilitychange', maybeRefresh);
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
     return () => {
-      window.removeEventListener('focus', maybeRefresh);
-      document.removeEventListener('visibilitychange', maybeRefresh);
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
     };
   }, [balanceKey, mutate]);
 
@@ -652,7 +652,7 @@ export default function PurchasePage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Phone className="w-4 h-4 text-primary mr-2" />
-                    <span className="ont-semibold">Your Phone</span>
+                    <span className="ont-semibold">Phone</span>
                   </div>
                   <span className="md:text-base font-bold text-black">
                     {phone ?? "-"}
@@ -665,7 +665,7 @@ export default function PurchasePage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-start">
                     <Wallet className="w-5 h-5 text-primary mr-2" />
-                    <span className="font-semibold">Your Balance</span>
+                    <span className="font-semibold">Balance</span>
                   </div>
                   <Badge
                     variant="secondary"
@@ -856,7 +856,7 @@ export default function PurchasePage() {
             {/* History Card: Request Charge & Purchase (manual fetch) */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Your History</CardTitle>
+                <CardTitle className="text-lg">History</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Tabs defaultValue="cr" className="w-full">
