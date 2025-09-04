@@ -261,15 +261,15 @@ export default function AdminPage() {
         new BroadcastChannel("thiha-shop").postMessage({
           type: "CR_CHANGED",
         });
-        setNotification("チャージリクエストを承認しました");
+        setNotification("Approved the request.");
         setTimeout(() => setNotification(""), 3000);
       } else {
-        setNotification("承認に失敗しました");
+        setNotification("Approve failed.");
         setTimeout(() => setNotification(""), 3000);
       }
     } catch (error) {
       console.error("Approval failed:", error);
-      setNotification("承認に失敗しました");
+      setNotification("Approve failed.");
       setTimeout(() => setNotification(""), 3000);
     } finally {
       setIsLoading(false);
@@ -282,7 +282,7 @@ export default function AdminPage() {
     const priceText = String(product.price ?? "").trim();
     const priceNum = Number(priceText);
     if (!priceText || !Number.isFinite(priceNum)) {
-      setEditError("価格を入力してください");
+      setEditError("Enter a price.");
       return;
     }
     try {
@@ -296,7 +296,7 @@ export default function AdminPage() {
         await refetchProducts();
         setEditingProduct(null);
         setEditError("");
-        setNotification("商品を更新しました");
+        setNotification("Product updated.");
         setTimeout(() => setNotification(""), 3000);
         // 他タブ（購入画面など）へ商品変更を通知（SWR再取得を促す）
         new BroadcastChannel("thiha-shop").postMessage({
@@ -305,7 +305,7 @@ export default function AdminPage() {
       }
     } catch (error) {
       console.error("Product update failed:", error);
-      setNotification("商品の更新に失敗しました");
+      setNotification("Update failed.");
       setTimeout(() => setNotification(""), 3000);
     }
   };
@@ -317,13 +317,11 @@ export default function AdminPage() {
   }) => {
     const id = product.id;
     if (!Number.isInteger(id)) {
-      setNotification("削除に失敗しました（ID不正）");
+      setNotification("Delete failed (bad ID).");
       setTimeout(() => setNotification(""), 3000);
       return;
     }
-    const ok = window.confirm(
-      `「${product.name ?? id}」を削除します。よろしいですか？`
-    );
+    const ok = window.confirm(`Delete "${product.name ?? id}"?`);
     if (!ok) return;
 
     try {
@@ -331,18 +329,16 @@ export default function AdminPage() {
       const result = await res.json().catch(() => ({}));
       if (res.ok && result?.success !== false) {
         await refetchProducts();
-        setNotification("商品を削除しました");
+        setNotification("Product deleted.");
         new BroadcastChannel("thiha-shop").postMessage({
           type: "PRODUCTS_CHANGED",
         });
       } else {
-        setNotification(
-          `商品の削除に失敗しました：${result?.error ?? res.statusText}`
-        );
+        setNotification(`Delete failed: ${result?.error ?? res.statusText}`);
       }
     } catch (e) {
       console.error("Product delete failed:", e);
-      setNotification("商品の削除に失敗しました");
+      setNotification("Delete failed.");
     } finally {
       setTimeout(() => setNotification(""), 3000);
     }
@@ -367,7 +363,7 @@ export default function AdminPage() {
         await refetchProducts();
         setNewProduct({ name: "", price: "" });
         setIsAddOpen(false);
-        setNotification("商品を追加しました");
+        setNotification("Product added.");
         setTimeout(() => setNotification(""), 3000);
         new BroadcastChannel("thiha-shop").postMessage({
           type: "PRODUCTS_CHANGED",
@@ -375,7 +371,7 @@ export default function AdminPage() {
       }
     } catch (error) {
       console.error("Product addition failed:", error);
-      setNotification("商品の追加に失敗しました");
+      setNotification("Add failed.");
       setTimeout(() => setNotification(""), 3000);
     } finally {
       setIsAdding(false); // ← 必ず解除
@@ -404,22 +400,22 @@ export default function AdminPage() {
       <header className="bg-card border-b border-border">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
-            <h1 className="text-xl font-black">管理者ダッシュボード</h1>
+            <h1 className="text-xl font-black">Admin Dashboard</h1>
             <>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setLogoutOpen(true)}
               >
-                ログアウト
+                Log out
               </Button>
               <ConfirmModal
                 open={logoutOpen}
                 onOpenChange={setLogoutOpen}
-                title="ログアウトの確認"
-                description="パスワード入力画面に戻ります。よろしいですか？"
+                title="Log out?"
+                description="You will go back to login. OK?"
                 confirmLabel="OK"
-                cancelLabel="キャンセル"
+                cancelLabel="Cancel"
                 onConfirm={() => {
                   window.location.href = "/api/admin/logout";
                 }}
@@ -445,7 +441,7 @@ export default function AdminPage() {
             className="h-16 flex flex-col gap-1"
           >
             <CreditCard className="w-6 h-6" />
-            <span>チャージリクエスト管理</span>
+            <span>Charge Requests</span>
           </Button>
           <Button
             variant={activeTab === "products" ? "default" : "outline"}
@@ -453,7 +449,7 @@ export default function AdminPage() {
             className="h-16 flex flex-col gap-1"
           >
             <Package className="w-6 h-6" />
-            <span>商品管理</span>
+            <span>Products</span>
           </Button>
           <Button
             variant={activeTab === "analytics" ? "default" : "outline"}
@@ -461,7 +457,7 @@ export default function AdminPage() {
             className="h-16 flex flex-col gap-1"
           >
             <BarChart3 className="w-6 h-6" />
-            <span>売上データ</span>
+            <span>Sales Data</span>
           </Button>
         </div>
 
@@ -469,16 +465,14 @@ export default function AdminPage() {
         {activeTab === "charge" && (
           <Card className="max-h-[75vh] flex flex-col overflow-hidden">
             <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg font-black">
-                チャージリクエスト管理
-              </CardTitle>
+              <CardTitle className="text-lg font-black">Charge Requests</CardTitle>
               <div className="flex items-center gap-2">
                 {crDirty && (
                   <Badge
                     variant="secondary"
                     className="bg-primary/10 text-primary"
                   >
-                    新規
+                    New
                   </Badge>
                 )}
                 <Button
@@ -502,17 +496,15 @@ export default function AdminPage() {
                 className="flex-1 flex flex-col w-full min-h-0"
               >
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="pending">
-                    承認待ち ({pendingRequests.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="processed">処理済み</TabsTrigger>
+                  <TabsTrigger value="pending">Pending ({pendingRequests.length})</TabsTrigger>
+                  <TabsTrigger value="processed">Done</TabsTrigger>
                 </TabsList>
                 {/* 電話番号検索（両タブ共通） */}
                 <div className="mt-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
-                      placeholder="電話番号で検索...（数字のみ可）"
+                      placeholder="Search phone... (numbers only)"
                       inputMode="numeric"
                       value={chargePhoneQuery}
                       onChange={(e) => setChargePhoneQuery(e.target.value)}
@@ -527,9 +519,7 @@ export default function AdminPage() {
                   className="flex-1 flex flex-col overflow-hidden mt-6 min-h-0"
                 >
                   {visiblePendingRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      承認待ちのリクエストはありません
-                    </div>
+                    <div className="text-center py-8 text-muted-foreground">No pending requests.</div>
                   ) : (
                     <div
                       className="flex-1 overflow-y-auto pr-2"
@@ -555,13 +545,10 @@ export default function AdminPage() {
                                       variant="secondary"
                                       className="bg-primary/10 text-primary"
                                     >
-                                      承認待ち
+                                      Pending
                                     </Badge>
                                   </div>
-                                  <div className="text-sm font-semibold text-muted-foreground">
-                                    チャージ額:{" "}
-                                    {request.amount.toLocaleString()}ks
-                                  </div>
+                                  <div className="text-sm font-semibold text-muted-foreground">Amount: {request.amount.toLocaleString()}ks</div>
                                   <div className="text-xs text-muted-foreground">
                                     <span className="text-sm font-semibold">
                                       {formatYGNMinute(request.requested_at)}
@@ -575,7 +562,7 @@ export default function AdminPage() {
                                   disabled={isLoading}
                                 >
                                   <Check className="w-4 h-4 mr-1" />
-                                  承認
+                                  Approve
                                 </Button>
                               </div>
                             </CardContent>
@@ -587,11 +574,8 @@ export default function AdminPage() {
                   {/* もっと見る（承認待ちタブ内） */}
                   {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
-                      <Button
-                        onClick={() => loadChargeRequests()}
-                        disabled={loadingCR}
-                      >
-                        もっと見る
+                      <Button onClick={() => loadChargeRequests()} disabled={loadingCR}>
+                        Load more
                       </Button>
                     </div>
                   )}
@@ -603,9 +587,7 @@ export default function AdminPage() {
                   className="flex-1 flex flex-col overflow-hidden mt-6 min-h-0"
                 >
                   {visibleProcessedRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      処理済みのリクエストはありません
-                    </div>
+                    <div className="text-center py-8 text-muted-foreground">No done requests.</div>
                   ) : (
                     <div
                       className="flex-1 overflow-y-auto pr-2"
@@ -629,25 +611,21 @@ export default function AdminPage() {
                                         variant="secondary"
                                         className="bg-green-100 text-green-800"
                                       >
-                                        承認済み
+                                        Approved
                                       </Badge>
                                     ) : (
                                       <Badge
                                         variant="secondary"
                                         className="bg-primary/10 text-primary"
                                       >
-                                        承認待ち
+                                        Pending
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    チャージ額:{" "}
-                                    {request.amount.toLocaleString()}ks
-                                  </div>
+                                  <div className="text-sm text-muted-foreground">Amount: {request.amount.toLocaleString()}ks</div>
                                   <div className="text-xs text-muted-foreground">
-                                    リクエスト:{" "}
-                                    {formatYGNMinute(request.requested_at)} |
-                                    承認:{" "}
+                                    Requested: {formatYGNMinute(request.requested_at)} |
+                                    Approved:
                                     {request.approved
                                       ? formatYGNMinute(request.approved_at)
                                       : "-"}
@@ -682,7 +660,7 @@ export default function AdminPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-black">商品管理</CardTitle>
+                <CardTitle className="text-lg font-black">Products</CardTitle>
                 <Dialog
                   open={isAddOpen}
                   onOpenChange={(open) => {
@@ -697,16 +675,16 @@ export default function AdminPage() {
                       disabled={isAdding}
                     >
                       <Plus className="w-4 h-4 mr-1" />
-                      商品追加
+                      Add Product
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>新しい商品を追加</DialogTitle>
+                      <DialogTitle>Add New Product</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="name">商品名</Label>
+                        <Label htmlFor="name">Name</Label>
                         <Input
                           id="name"
                           value={newProduct.name}
@@ -720,7 +698,7 @@ export default function AdminPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="price">価格</Label>
+                        <Label htmlFor="price">Price</Label>
                         <Input
                           id="price"
                           type="number"
@@ -740,7 +718,7 @@ export default function AdminPage() {
                         disabled={isAdding}
                         aria-busy={isAdding}
                       >
-                        {isAdding ? "追加中…" : "追加"}
+                        {isAdding ? "Adding..." : "Add"}
                       </Button>
                     </div>
                   </DialogContent>
@@ -752,7 +730,7 @@ export default function AdminPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="商品名で検索..."
+                    placeholder="Search by name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -765,9 +743,9 @@ export default function AdminPage() {
                   <table className="w-full">
                     <thead className="sticky top-0 bg-background border-b">
                       <tr>
-                        <th className="text-left py-3 px-4">商品名</th>
-                        <th className="text-left py-3 px-4">価格</th>
-                        <th className="text-right py-3 px-4">操作</th>
+                        <th className="text-left py-3 px-4">Name</th>
+                        <th className="text-left py-3 px-4">Price</th>
+                        <th className="text-right py-3 px-4">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -814,9 +792,7 @@ export default function AdminPage() {
               </div>
 
               {filteredProducts.length === 0 && searchTerm && (
-                <div className="text-center py-8 text-muted-foreground">
-                  「{searchTerm}」に一致する商品が見つかりません
-                </div>
+                <div className="text-center py-8 text-muted-foreground">No products found for "{searchTerm}".</div>
               )}
 
               {/* 単一・制御モーダル：編集 */}
@@ -831,13 +807,13 @@ export default function AdminPage() {
               >
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>商品を編集</DialogTitle>
+                    <DialogTitle>Edit Product</DialogTitle>
                   </DialogHeader>
 
                   {editingProduct && (
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="edit-name">商品名</Label>
+                        <Label htmlFor="edit-name">Name</Label>
                         <Input
                           id="edit-name"
                           value={editingProduct.name}
@@ -851,7 +827,7 @@ export default function AdminPage() {
                       </div>
 
                       <div>
-                        <Label htmlFor="edit-price">価格</Label>
+                        <Label htmlFor="edit-price">Price</Label>
                         <Input
                           id="edit-price"
                           type="number"
@@ -877,7 +853,7 @@ export default function AdminPage() {
                         onClick={() => handleEditProduct(editingProduct)}
                         className="w-full"
                       >
-                        更新
+                        Update
                       </Button>
                     </div>
                   )}
@@ -890,7 +866,7 @@ export default function AdminPage() {
         {activeTab === "analytics" && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-black">売上データ</CardTitle>
+              <CardTitle className="text-lg font-black">Sales Data</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-center py-8">
@@ -901,7 +877,7 @@ export default function AdminPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      スプレッドシートを開く
+                      Open Spreadsheet
                     </a>
                   </Button>
                   <Button asChild size="lg" className="h-12 px-8 text-lg">
@@ -910,7 +886,7 @@ export default function AdminPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      ダッシュボードを開く
+                      Open Dashboard
                     </a>
                   </Button>
                 </div>

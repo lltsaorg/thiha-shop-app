@@ -13,14 +13,14 @@ export default function AdminLoginPage() {
   return (
     <div style={{ maxWidth: 420, margin: "64px auto", padding: 24 }}>
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
-        Admin Gate
+        Admin Login
       </h1>
       <p style={{ color: "#666", marginBottom: 16 }}>
-        パスワードを入力してください。
+        Please enter password.
       </p>
       {error && (
         <div style={{ color: "#b91c1c", marginBottom: 8 }}>
-          パスワードが違います。
+          Wrong password.
         </div>
       )}
       <form
@@ -35,7 +35,7 @@ export default function AdminLoginPage() {
             name="pass"
             value={pass}
             onChange={(e) => setPass(e.target.value)}
-            placeholder="パスワード"
+            placeholder="Password"
             style={{
               width: "100%",
               padding: "10px 12px",
@@ -48,7 +48,7 @@ export default function AdminLoginPage() {
           <button
             type="button"
             onClick={() => setShowPass((v) => !v)}
-            aria-label={showPass ? "パスワードを隠す" : "パスワードを表示"}
+            aria-label={showPass ? "Hide password" : "Show password"}
             style={{
               position: "absolute",
               right: 8,
@@ -61,7 +61,7 @@ export default function AdminLoginPage() {
               cursor: "pointer",
             }}
           >
-            {showPass ? "隠す" : "表示"}
+            {showPass ? "Hide" : "Show"}
           </button>
         </div>
         <button
@@ -77,7 +77,7 @@ export default function AdminLoginPage() {
             cursor: submitting ? "not-allowed" : "pointer",
           }}
         >
-          {submitting ? "送信中..." : "ログイン"}
+          {submitting ? "Logging in..." : "Log in"}
         </button>
       </form>
     </div>
