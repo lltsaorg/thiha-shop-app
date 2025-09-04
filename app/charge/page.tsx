@@ -176,7 +176,7 @@ export default function ChargePage() {
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             </Link>
-            <h1 className="text-lg font-black">Request Charge Money</h1>
+            <h1 className="text-lg font-black">Top-up</h1>
           </div>
         </div>
       </header>
@@ -221,7 +221,7 @@ export default function ChargePage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Pick an amount and press Request Charge Money.
+                  Pick an amount and press Top-up.
                 </p>
               </div>
 
@@ -243,12 +243,12 @@ export default function ChargePage() {
                 ) : (
                   <>
                     <CreditCard className="w-5 h-5 mr-2" />
-                    Request Charge Money
+                    Top-up
                   </>
                 )}
               </Button>
 
-              {/* ✅ 追加：Charge MoneyRequest前確認モーダル（Phoneはマスクしない） */}
+              {/* ✅ 追加：Top-up前確認モーダル（Phoneはマスクしない） */}
               <ConfirmModal
                 open={confirmOpen}
                 onOpenChange={setConfirmOpen}

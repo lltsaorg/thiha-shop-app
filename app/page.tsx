@@ -687,7 +687,7 @@ export default function PurchasePage() {
                 <Link href="/charge">
                   <Button className="w-full h-12 text-lg font-semibold">
                     <CreditCard className="w-5 h-5 mr-2" />
-                    Request Charge Money
+                    Top-up
                   </Button>
                 </Link>
               </CardContent>
@@ -849,7 +849,7 @@ export default function PurchasePage() {
                       <DialogTitle>Insufficient Balance</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 text-center">
-                      <p>Go back to Home, request charge money.</p>
+                      <p>Go back to Home, Top-up.</p>
                       <Button
                         className="w-full h-11"
                         onClick={() => {
@@ -873,11 +873,11 @@ export default function PurchasePage() {
               <CardContent className="space-y-4">
                 <Tabs defaultValue="cr" className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="cr">Request Charge Money</TabsTrigger>
+                    <TabsTrigger value="cr">Top-up</TabsTrigger>
                     <TabsTrigger value="purchase">Purchase</TabsTrigger>
                   </TabsList>
 
-                  {/* Request Charge Money tab */}
+                  {/* Top-up tab */}
                   <TabsContent value="cr" className="mt-4">
                     {!crLoaded ? (
                       <div className="flex flex-col items-center gap-3 py-4">
