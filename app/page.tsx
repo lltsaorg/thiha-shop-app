@@ -138,10 +138,7 @@ export default function PurchasePage() {
     [phone]
   );
   const balanceKey = useMemo(
-    () =>
-      normalizedPhone
-        ? `/api/balance?phone=${encodeURIComponent(normalizedPhone)}`
-        : null,
+    () => (normalizedPhone ? `/api/balance` : null),
     [normalizedPhone]
   );
 
