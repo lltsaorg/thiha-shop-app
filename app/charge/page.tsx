@@ -99,10 +99,10 @@ export default function ChargePage() {
     return (
       <div className="min-h-screen bg-background p-4">
         <div className="max-w-md mx-auto">
-          <Card className="border-2 border-primary">
+          <Card className="border-2 border-blue-500">
             <CardHeader className="text-center pb-4">
-              <div className="mx-auto w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="w-8 h-8 text-primary" />
+              <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle className="w-8 h-8 text-blue-600" />
               </div>
               <CardTitle className="text-xl font-black">Request Sent</CardTitle>
             </CardHeader>
@@ -145,14 +145,16 @@ export default function ChargePage() {
                 </div>
               </div>
 
-              <Alert className="border-primary bg-primary/5">
+              <Alert className="border-blue-500 bg-blue-50">
                 <AlertDescription className="flex justify-center text-center text-lg text-red-500 font-bold">
-                  Show this screen to admin staff.
+                  Show this screen to admin staff
                 </AlertDescription>
               </Alert>
 
               <Link href="/" className="block">
-                <Button className="w-full h-12">Back Home</Button>
+                <Button className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white">
+                  Back Home
+                </Button>
               </Link>
             </CardContent>
           </Card>

@@ -587,7 +587,7 @@ export default function PurchasePage() {
 
               <Alert className="border-primary bg-primary/5">
                 <AlertDescription className="flex justify-center text-center text-lg text-red-500 font-bold">
-                  Show this screen to admin staff.
+                  Show this screen to admin staff
                 </AlertDescription>
               </Alert>
 
@@ -904,17 +904,17 @@ export default function PurchasePage() {
                                     <CardContent className="p-3">
                                       <div className="flex items-center justify-between">
                                         <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                          <Badge
-                                            variant="secondary"
-                                            className="bg-primary/10 text-primary"
-                                          >
-                                            Pending
-                                          </Badge>
-                                          <span className="text-xs text-muted-foreground font-semibold">
-                                            ID: {r.id}
-                                          </span>
-                                        </div>
+                                          <div className="flex items-center gap-2">
+                                            <Badge
+                                              variant="secondary"
+                                              className="bg-primary/10 text-primary"
+                                            >
+                                              Pending
+                                            </Badge>
+                                            <span className="text-xs text-muted-foreground font-semibold">
+                                              ID: {r.id}
+                                            </span>
+                                          </div>
                                           <div className="text-sm text-muted-foreground">
                                             Amount:{" "}
                                             {Number(r.amount).toLocaleString()}
