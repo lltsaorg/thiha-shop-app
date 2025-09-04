@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   useSelectedItems,
   type SelectedItem,
@@ -38,14 +38,10 @@ import BalanceGuard from "@/components/ui/BalanceGuard";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 
 // ブラウザ用 Supabase クライアント
-import { createClient } from "@supabase/supabase-js";
+// Note: No Supabase Realtime here to keep within free tier
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// NOTE: Supabase browser client is no longer used for Realtime on this page
-const supabaseBrowser = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-);
+// (Realtime removed per cost concerns)
 
 type Product = { id: number; name: string; price: number };
 // ✅ 修正点：選択済みは product オブジェクト＋Qtyで保持（編集/削除しやすく）
@@ -147,11 +143,7 @@ export default function PurchasePage() {
     [normalizedPhone]
   );
 
-  // ログイン直後に /api/balance を即時取り直す
-  useEffect(() => {
-    if (!balanceKey) return;
-    mutate(balanceKey);
-  }, [balanceKey, mutate]);
+  // 初期取得は useSWR に任せる（余計な二重取得を避ける）
 
   // /api/balance 取得
   const { data: balanceSnap } = useSWR(balanceKey, fetcher, {
@@ -171,6 +163,27 @@ export default function PurchasePage() {
       setBalance(apiBal);
     }
   }, [balanceSnap, balance]);
+
+  // 管理画面と同様：フォーカス/可視化時に軽く再取得（3秒スロットル）
+  const lastFocusSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (!balanceKey) return;
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastFocusSyncRef.current < 3000) return; // 3秒スロットル
+      lastFocusSyncRef.current = now;
+      mutate(balanceKey);
+    };
+    window.addEventListener('focus', maybeRefresh);
+    document.addEventListener('visibilitychange', maybeRefresh);
+    return () => {
+      window.removeEventListener('focus', maybeRefresh);
+      document.removeEventListener('visibilitychange', maybeRefresh);
+    };
+  }, [balanceKey, mutate]);
+
+  // 監視ポーリングは無効化（無料枠節約のため）
 
   // ====== 履歴取得関数（押したときだけ取得） ======
   const loadChargeHistory = async () => {
