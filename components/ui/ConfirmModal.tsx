@@ -17,6 +17,7 @@ type ConfirmModalProps = {
   onOpenChange: (v: boolean) => void;
   onConfirm: () => void | Promise<void>;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
   cancelLabel?: string;
   hideCancel?: boolean;
   children?: ReactNode;
@@ -29,6 +30,7 @@ export default function ConfirmModal({
   onOpenChange,
   onConfirm,
   confirmLabel = "確定",
+  confirmDisabled = false,
   cancelLabel = "戻る",
   hideCancel = false,
   children,
@@ -49,7 +51,9 @@ export default function ConfirmModal({
               {cancelLabel}
             </Button>
           )}
-          <Button onClick={onConfirm}>{confirmLabel}</Button>
+          <Button onClick={onConfirm} disabled={confirmDisabled} aria-busy={confirmDisabled}>
+            {confirmLabel}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

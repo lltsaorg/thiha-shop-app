@@ -1,7 +1,7 @@
 ﻿/* app/charge/page.tsx */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CreditCard, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ export default function ChargePage() {
   const [requestData, setRequestData] = useState<ProofData | null>(null);
   // ✅ 追加：確認モーダルの開閉
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Synchronous re-entry guard to prevent double-submit (e.g., double-click)
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     // Prefer cookie session; fallback to legacy localStorage
@@ -52,7 +54,8 @@ export default function ChargePage() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!phone || !amount || submitting) return;
+    if (!phone || !amount || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -91,6 +94,7 @@ export default function ChargePage() {
       setError("リクエストの送信に失敗しました");
     } finally {
       setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 
@@ -254,6 +258,7 @@ export default function ChargePage() {
                 description="Please check amount. OK?"
                 confirmLabel="Request"
                 cancelLabel="Cancel"
+                confirmDisabled={submitting}
                 onConfirm={async () => {
                   setConfirmOpen(false);
                   await handleSubmit();
