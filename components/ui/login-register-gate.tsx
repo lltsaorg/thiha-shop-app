@@ -37,6 +37,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
   const tried = useRef(false);
   const [alreadyExistsOpen, setAlreadyExistsOpen] = useState(false);
   const [confirmRegisterOpen, setConfirmRegisterOpen] = useState(false);
+  const registeringRef = useRef(false);
+  const loggingInRef = useRef(false);
 
   const onAuthedRef = useRef(onAuthed);
   useEffect(() => {
@@ -125,6 +127,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       return;
     }
 
+    if (loggingInRef.current) return;
+    loggingInRef.current = true;
     setLoading(true);
     try {
       // ★ 送信も保存も正規化した 09... を使用
@@ -160,6 +164,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       setError("Network error.");
     } finally {
       setLoading(false);
+      loggingInRef.current = false;
     }
   }
 
@@ -172,6 +177,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       return;
     }
 
+    if (registeringRef.current) return;
+    registeringRef.current = true;
     setLoading(true);
     try {
       // 事前チェック：既に登録済みならモーダル表示して終了
@@ -230,6 +237,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
       setError("Network error.");
     } finally {
       setLoading(false);
+      registeringRef.current = false;
     }
   }
 
@@ -355,6 +363,7 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
         description="Is this correct?"
         confirmLabel="OK"
         cancelLabel="Cancel"
+        confirmDisabled={loading}
         onConfirm={() => {
           setConfirmRegisterOpen(false);
           void doRegister();
