@@ -70,9 +70,7 @@ export default function ChargePage() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json?.success === false) {
-        setError(
-          json?.error || res.statusText || "リクエストの送信に失敗しました"
-        );
+        setError(json?.error || res.statusText || "Fail to request");
         return;
       }
 
@@ -91,7 +89,7 @@ export default function ChargePage() {
       // 管理者画面の一覧を更新させる（同端末間通知）
       new BroadcastChannel("thiha-shop").postMessage({ type: "CR_CHANGED" });
     } catch (e) {
-      setError("リクエストの送信に失敗しました");
+      setError("Fail to request");
     } finally {
       setSubmitting(false);
       submittingRef.current = false;

@@ -51,9 +51,7 @@ export default function PhoneGate({
       setOpen(false);
       onResolved(p, Number(json.balance ?? 0), json.last_charge_date);
     } catch {
-      setErr(
-        "残高の取得に失敗しました。ネットワークや設定を確認してください。"
-      );
+      setErr("Can't get balance. Check network or settings.");
       setOpen(true);
     } finally {
       setLoading(false);
@@ -65,9 +63,7 @@ export default function PhoneGate({
     setErr(null);
     const v = phone.trim();
     if (!isValidPhone(v)) {
-      setErr(
-        "電話番号を正しく入力してください（数字/+/−/スペース、3文字以上）"
-      );
+      setErr("Enter a valid phone (digits, + - space, 3+ chars).");
       return;
     }
     if (fetchedRef.current) return;

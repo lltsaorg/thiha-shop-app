@@ -24,8 +24,6 @@ export function clearSavedPhone() {
 export function requireSavedPhone(): string {
   const p = getSavedPhone();
   if (!p)
-    throw new Error(
-      "電話番号が未設定です（最初の画面でログイン/新規登録してください）"
-    );
+    throw new Error("Phone not set. Please log in or register first.");
   return p;
 }

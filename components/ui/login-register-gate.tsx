@@ -154,12 +154,10 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
           phone: normalized,
         });
       } else {
-        setError(
-          "入力された電話番号は登録されていません。Registerしてください。"
-        );
+        setError("Phone not registered. Please register.");
       }
     } catch {
-      setError("通信に失敗しました");
+      setError("Network error.");
     } finally {
       setLoading(false);
     }
@@ -226,10 +224,10 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
           phone: normalized,
         });
       } else {
-        setError(j?.error || j?.message || "登録に失敗しました");
+        setError(j?.error || j?.message || "Fail to register");
       }
     } catch {
-      setError("通信に失敗しました");
+      setError("Network error.");
     } finally {
       setLoading(false);
     }

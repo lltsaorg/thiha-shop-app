@@ -549,12 +549,12 @@ export default function PurchasePage() {
         setShowReceipt(true);
       } else {
         alert(
-          result?.error ? JSON.stringify(result.error) : "購入に失敗しました"
+          result?.error ? JSON.stringify(result.error) : "Fail to purchase"
         );
       }
     } catch (error) {
       console.error("Purchase failed:", error);
-      alert("購入に失敗しました");
+      alert("Fail to purchase");
     } finally {
       setPurchasing(false);
       purchasingRef.current = false;
@@ -780,7 +780,9 @@ export default function PurchasePage() {
                     }
                     setConfirmOpen(true);
                   }}
-                  disabled={getTotalPrice() === 0 || loadingProducts || purchasing}
+                  disabled={
+                    getTotalPrice() === 0 || loadingProducts || purchasing
+                  }
                   aria-busy={purchasing}
                   className="w-full h-12 text-lg font-semibold"
                 >
