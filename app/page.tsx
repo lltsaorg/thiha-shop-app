@@ -66,6 +66,8 @@ export default function PurchasePage() {
   const [purchaseData, setPurchaseData] = useState<any>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const purchasingRef = useRef(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [insufficientOpen, setInsufficientOpen] = useState(false);
   const router = useRouter();
@@ -496,6 +498,9 @@ export default function PurchasePage() {
       setInsufficientOpen(true);
       return;
     }
+    if (purchasingRef.current) return;
+    purchasingRef.current = true;
+    setPurchasing(true);
     try {
       const response = await apiFetch("/api/purchase", {
         method: "POST",
@@ -550,6 +555,9 @@ export default function PurchasePage() {
     } catch (error) {
       console.error("Purchase failed:", error);
       alert("購入に失敗しました");
+    } finally {
+      setPurchasing(false);
+      purchasingRef.current = false;
     }
   };
 
@@ -772,7 +780,8 @@ export default function PurchasePage() {
                     }
                     setConfirmOpen(true);
                   }}
-                  disabled={getTotalPrice() === 0 || loadingProducts}
+                  disabled={getTotalPrice() === 0 || loadingProducts || purchasing}
+                  aria-busy={purchasing}
                   className="w-full h-12 text-lg font-semibold"
                 >
                   Purchase
@@ -786,6 +795,7 @@ export default function PurchasePage() {
                   description="Please check selected items. OK?"
                   confirmLabel="Purchase"
                   cancelLabel="Cancel"
+                  confirmDisabled={purchasing}
                   onConfirm={async () => {
                     setConfirmOpen(false);
                     await handlePurchase();
