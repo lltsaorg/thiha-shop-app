@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { getSavedPhone } from "@/lib/client-auth";
+import { getSavedPhone, setSavedPhone } from "@/lib/client-auth";
 // ✅ 追加：確認モーダル
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { apiFetch } from "@/lib/api";
@@ -51,6 +51,7 @@ export default function ChargePage() {
         if (r.ok) {
           const j = await r.json();
           if (j?.phone) {
+            try { setSavedPhone(j.phone); } catch {}
             setPhone(j.phone);
             return;
           }

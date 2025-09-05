@@ -112,6 +112,7 @@ export default function PurchasePage() {
         if (r.ok) {
           const j = await r.json();
           if (j?.phone) {
+            try { localStorage.setItem("thiha_phone", j.phone); } catch {}
             setPhone(j.phone);
             return;
           }

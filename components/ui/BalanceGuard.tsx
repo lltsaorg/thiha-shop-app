@@ -5,7 +5,7 @@ import * as React from "react";
 import useSWR from "swr";
 import LoginRegisterGate from "@/components/ui/login-register-gate";
 import { apiFetch } from "@/lib/api";
-import { getSavedPhoneIfFresh } from "@/lib/client-auth";
+import { getSavedPhoneIfFresh, setSavedPhone } from "@/lib/client-auth";
 
 declare global {
   interface Window {
@@ -37,6 +37,7 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
   // Check cookie session and capture phone; fallback to saved phone if fresh
   React.useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     (async () => {
       try {
         const r = await fetch("/api/auth/session", { cache: "no-store" });
@@ -44,7 +45,11 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
         if (r.ok) {
           const j = await r.json().catch(() => ({}));
           setAuthed(true);
-          if (typeof j?.phone === "string" && j.phone) setPhone(j.phone);
+          if (typeof j?.phone === "string" && j.phone) {
+            setPhone(j.phone);
+            // Proactively keep fallback fresh to avoid gate flicker on next navigation
+            try { setSavedPhone(j.phone); } catch {}
+          }
         } else {
           // Fallback only if within allowed age
           const saved = getSavedPhoneIfFresh(getFallbackAgeSec());
@@ -52,8 +57,18 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
             setAuthed(true);
             setPhone(saved);
           } else {
-            setAuthed(false);
-            setPhone(null);
+            // Grace delay (avoid flicker): wait briefly then decide
+            timer = setTimeout(() => {
+              if (cancelled) return;
+              const saved2 = getSavedPhoneIfFresh(getFallbackAgeSec());
+              if (saved2) {
+                setAuthed(true);
+                setPhone(saved2);
+              } else {
+                setAuthed(false);
+                setPhone(null);
+              }
+            }, 150);
           }
         }
       } catch {
@@ -63,13 +78,24 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
             setAuthed(true);
             setPhone(saved);
           } else {
-            setAuthed(false);
+            // Grace delay on error as well
+            timer = setTimeout(() => {
+              if (cancelled) return;
+              const saved2 = getSavedPhoneIfFresh(getFallbackAgeSec());
+              if (saved2) {
+                setAuthed(true);
+                setPhone(saved2);
+              } else {
+                setAuthed(false);
+              }
+            }, 150);
           }
         }
       }
     })();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
