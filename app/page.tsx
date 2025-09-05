@@ -10,6 +10,7 @@ import {
   Edit,
   Trash2,
   Phone,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +68,7 @@ export default function PurchasePage() {
   const [purchaseData, setPurchaseData] = useState<any>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [preConfirmLoading, setPreConfirmLoading] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const purchasingRef = useRef(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -520,6 +522,8 @@ export default function PurchasePage() {
     setShowReceipt(false);
     setPurchaseData(null);
     setSelectedProducts([]); // モーダル方式のため空配列へ初期化
+    // Ensure balance reflects latest state when returning home (prod first-time case)
+    if (balanceKey) mutate(balanceKey, undefined, { revalidate: true });
   };
 
   // Preflight to ensure selected items still exist
@@ -857,22 +861,33 @@ export default function PurchasePage() {
                 {/* 購入ボタン（購入確認モーダルは現状維持） */}
                 <Button
                   onClick={async () => {
-                    const ok = await preflightSelection();
-                    if (!ok) return;
-                    const total = getTotalPrice();
-                    if (total > 0 && balance < total) {
-                      setInsufficientOpen(true);
-                      return;
+                    setPreConfirmLoading(true);
+                    try {
+                      const ok = await preflightSelection();
+                      if (!ok) return;
+                      const total = getTotalPrice();
+                      if (total > 0 && balance < total) {
+                        setInsufficientOpen(true);
+                        return;
+                      }
+                      setConfirmOpen(true);
+                    } finally {
+                      setPreConfirmLoading(false);
                     }
-                    setConfirmOpen(true);
                   }}
                   disabled={
-                    getTotalPrice() === 0 || loadingProducts || purchasing
+                    getTotalPrice() === 0 || loadingProducts || purchasing || preConfirmLoading
                   }
-                  aria-busy={purchasing}
+                  aria-busy={purchasing || preConfirmLoading}
                   className="w-full h-12 text-lg font-semibold"
                 >
-                  Purchase
+                  {preConfirmLoading ? (
+                    <span className="inline-flex items-center">
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Preparing...
+                    </span>
+                  ) : (
+                    "Purchase"
+                  )}
                 </Button>
 
                 {/* 購入前確認モーダル（従来どおり） */}
