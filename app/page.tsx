@@ -33,6 +33,7 @@ import { getSavedPhone } from "@/lib/client-auth";
 import useSWR, { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { apiFetch } from "@/lib/api";
+import { startRequest, endRequest } from "@/lib/request-tracker";
 import { formatYGNMinute } from "@/lib/utils";
 import BalanceGuard from "@/components/ui/BalanceGuard";
 // ✅ 購入前の確認モーダルはそのまま維持（修正点の対象外）
@@ -521,12 +522,20 @@ export default function PurchasePage() {
   };
 
   // レシートを閉じたら選択を初期化
-  const handleReceiptClose = () => {
-    setShowReceipt(false);
-    setPurchaseData(null);
-    setSelectedProducts([]); // モーダル方式のため空配列へ初期化
-    // Ensure balance reflects latest state when returning home (prod first-time case)
-    if (balanceKey) mutate(balanceKey, undefined, { revalidate: true });
+  const handleReceiptClose = async () => {
+    // Show global loading briefly and refresh balance after a short delay
+    startRequest("Updating balance...");
+    try {
+      setShowReceipt(false);
+      setPurchaseData(null);
+      setSelectedProducts([]); // モーダル方式のため空配列へ初期化
+      // Small delay to absorb DB write propagation differences in prod
+      await new Promise((r) => setTimeout(r, 250));
+      // Ensure balance reflects latest state when returning home
+      if (balanceKey) await mutate(balanceKey, undefined, { revalidate: true });
+    } finally {
+      endRequest();
+    }
   };
 
   // Preflight to ensure selected items still exist

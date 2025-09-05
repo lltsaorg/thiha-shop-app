@@ -7,7 +7,7 @@ import LoginRegisterGate from "@/components/ui/login-register-gate";
 import { apiFetch } from "@/lib/api";
 
 const fetcher = async (u: string) => {
-  const res = await apiFetch(u, { lockUI: false });
+  const res = await apiFetch(u, { lockUI: false, cache: "no-store" });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json?.error || res.statusText);
   return json;
@@ -17,14 +17,23 @@ export type BalanceGuardProps = { children?: React.ReactNode };
 
 export default function BalanceGuard({ children }: BalanceGuardProps) {
   const [authed, setAuthed] = React.useState<boolean | null>(null);
+  const [phone, setPhone] = React.useState<string | null>(null);
 
-  // Check cookie session
+  // Check cookie session and capture phone
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const r = await fetch("/api/auth/session", { cache: "no-store" });
-        if (!cancelled) setAuthed(r.ok);
+        if (cancelled) return;
+        if (r.ok) {
+          const j = await r.json().catch(() => ({}));
+          setAuthed(true);
+          if (typeof j?.phone === "string" && j.phone) setPhone(j.phone);
+        } else {
+          setAuthed(false);
+          setPhone(null);
+        }
       } catch {
         if (!cancelled) setAuthed(false);
       }
@@ -35,7 +44,7 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
   }, []);
 
   const { data } = useSWR(
-    authed ? `/api/balance` : null,
+    authed && phone ? `/api/balance?phone=${encodeURIComponent(phone)}` : null,
     fetcher,
     {
       revalidateOnFocus: false,
