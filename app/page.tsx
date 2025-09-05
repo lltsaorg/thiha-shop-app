@@ -141,7 +141,10 @@ export default function PurchasePage() {
     [phone]
   );
   const balanceKey = useMemo(
-    () => (normalizedPhone ? `/api/balance` : null),
+    () =>
+      normalizedPhone
+        ? `/api/balance?phone=${encodeURIComponent(normalizedPhone)}`
+        : null,
     [normalizedPhone]
   );
 
@@ -876,14 +879,17 @@ export default function PurchasePage() {
                     }
                   }}
                   disabled={
-                    getTotalPrice() === 0 || loadingProducts || purchasing || preConfirmLoading
+                    getTotalPrice() === 0 ||
+                    loadingProducts ||
+                    purchasing ||
+                    preConfirmLoading
                   }
                   aria-busy={purchasing || preConfirmLoading}
                   className="w-full h-12 text-lg font-semibold"
                 >
                   {preConfirmLoading ? (
                     <span className="inline-flex items-center">
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Preparing...
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     </span>
                   ) : (
                     "Purchase"
