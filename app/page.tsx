@@ -456,6 +456,10 @@ export default function PurchasePage() {
     }
     setSearchQuery("");
     setShowProductModal(true);
+    // Ensure latest products when opening the modal (prod cross-device case)
+    try {
+      void revalidateProducts();
+    } catch {}
   };
 
   const closeProductModal = () => {
