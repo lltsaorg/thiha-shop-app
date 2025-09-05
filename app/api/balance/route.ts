@@ -30,7 +30,8 @@ export async function GET(req: Request) {
       status: 200,
       headers: {
         "content-type": "application/json",
-        "cache-control": "public, max-age=2",
+        // Avoid stale CDN/browser cache after purchase
+        "cache-control": "no-store",
       },
     });
   }
@@ -47,7 +48,8 @@ export async function GET(req: Request) {
       status: 200,
       headers: {
         "content-type": "application/json",
-        "cache-control": "public, max-age=2",
+        // Avoid stale CDN/browser cache after purchase
+        "cache-control": "no-store",
       },
     }
   );
