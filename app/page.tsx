@@ -154,6 +154,18 @@ export default function PurchasePage() {
     shouldRetryOnError: false,
   });
 
+  // If coming back from /charge with a flag, force one-time revalidation
+  useEffect(() => {
+    if (!balanceKey) return;
+    try {
+      const flag = localStorage.getItem("thiha_refresh_balance");
+      if (flag) {
+        localStorage.removeItem("thiha_refresh_balance");
+        mutate(balanceKey, undefined, { revalidate: true });
+      }
+    } catch {}
+  }, [balanceKey, mutate]);
+
   // APIのBalanceを balance ステートへ反映
   useEffect(() => {
     if (!balanceSnap?.exists) return;

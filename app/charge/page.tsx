@@ -36,6 +36,13 @@ export default function ChargePage() {
   // Synchronous re-entry guard to prevent double-submit (e.g., double-click)
   const submittingRef = useRef(false);
 
+  // Mark that Home should refresh balance once after returning
+  const markRefreshBalance = () => {
+    try {
+      localStorage.setItem("thiha_refresh_balance", "1");
+    } catch {}
+  };
+
   useEffect(() => {
     // Prefer cookie session; fallback to legacy localStorage
     (async () => {
@@ -154,7 +161,10 @@ export default function ChargePage() {
               </Alert>
 
               <Link href="/" className="block">
-                <Button className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white">
+                <Button
+                  onClick={markRefreshBalance}
+                  className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white"
+                >
                   Back Home
                 </Button>
               </Link>
@@ -276,11 +286,7 @@ export default function ChargePage() {
                 </div>
               </ConfirmModal>
 
-              <Link href="/" className="block">
-                <Button variant="outline" className="w-full bg-transparent">
-                  Back Home
-                </Button>
-              </Link>
+              {/* Back Home button removed per request */}
             </CardContent>
           </Card>
         </div>
