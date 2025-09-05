@@ -20,7 +20,11 @@ export default function BalanceCard() {
   return (
     <div className="flex items-center justify-between rounded-xl border p-4 bg-card">
       <span className="text-sm text-muted-foreground">現在の残高</span>
-      <span className="text-lg font-bold">¥{balance.toLocaleString()}</span>
+      {isLoading && !data ? (
+        <span className="h-6 w-20 rounded bg-muted animate-pulse" />
+      ) : (
+        <span className="text-lg font-bold">¥{balance.toLocaleString()}</span>
+      )}
     </div>
   );
 }

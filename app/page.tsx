@@ -154,7 +154,7 @@ export default function PurchasePage() {
   // 初期取得は useSWR に任せる（余計な二重取得を避ける）
 
   // /api/balance 取得
-  const { data: balanceSnap } = useSWR(balanceKey, fetcher, {
+  const { data: balanceSnap, isLoading: balanceLoading } = useSWR(balanceKey, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     revalidateIfStale: false,
@@ -782,7 +782,11 @@ export default function PurchasePage() {
                     variant="secondary"
                     className="text-lg font-bold px-3 py-1 bg-primary/10 text-primary"
                   >
-                    {balance.toLocaleString()}ks
+                    {balanceLoading && !balanceSnap ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>{balance.toLocaleString()}ks</>
+                    )}
                   </Badge>
                 </div>
               </CardContent>
