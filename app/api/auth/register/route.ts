@@ -1,6 +1,6 @@
 // app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/db";
+import { supabase, invalidateBalanceCache } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
 
 // Nodeランタイム（service_roleでDB操作するサーバー専用）
@@ -64,6 +64,11 @@ export async function POST(req: Request) {
             { onConflict: "phone_number", ignoreDuplicates: true }
           );
         if (upsertErr) throw new Error(upsertErr.message);
+        // Invalidate any stale negative cache (e.g., from pre-check) so that
+        // subsequent /api/balance or /api/auth/check reflects the new user immediately.
+        try {
+          invalidateBalanceCache(phone);
+        } catch {}
         return NextResponse.json(
           { ok: true, phone, balance: 0, created: true },
           { status: 200 }
