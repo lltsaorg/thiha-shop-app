@@ -525,27 +525,45 @@ export default function PurchasePage() {
   // Preflight to ensure selected items still exist
   const preflightSelection = async (): Promise<boolean> => {
     try {
-      const currentIds = new Set(products.map((p) => p.id));
-      const missingNow = selectedProducts.filter(
-        (row) => !currentIds.has(row.product.id)
+      // Always refresh once before confirming to reflect admin edits in prod
+      const latest = await revalidateProducts();
+      const latestList: any[] = Array.isArray(latest)
+        ? latest
+        : latest?.items ?? [];
+      const latestIds = new Set(latestList.map((p: any) => Number(p.id)));
+      const latestMap = new Map<number, any>(
+        latestList.map((p: any) => [Number(p.id), p])
       );
-      if (missingNow.length > 0) {
-        const latest = await revalidateProducts();
-        const latestList: any[] = Array.isArray(latest)
-          ? latest
-          : latest?.items ?? [];
-        const latestIds = new Set(latestList.map((p: any) => Number(p.id)));
-        const stillMissing = selectedProducts.filter(
-          (row) => !latestIds.has(row.product.id)
+
+      // Remove items that no longer exist
+      const missing = selectedProducts.filter(
+        (row) => !latestIds.has(row.product.id)
+      );
+      if (missing.length > 0) {
+        setSelectedProducts((prev) =>
+          prev.filter((row) => latestIds.has(row.product.id))
         );
-        if (stillMissing.length > 0) {
-          setSelectedProducts((prev) =>
-            prev.filter((row) => latestIds.has(row.product.id))
-          );
-          alert("Item deleted from list, select again");
-          return false;
-        }
+        alert(missing[0].product.name + " : Deleted from menu");
+        return false;
       }
+
+      // Sync changed name/price for existing items (keep quantities and order)
+      setSelectedProducts((prev) =>
+        prev.map((row) => {
+          const latestP = latestMap.get(row.product.id);
+          if (!latestP) return row;
+          const next = {
+            id: row.id,
+            product: {
+              id: Number(latestP.id),
+              name: latestP.name,
+              price: Number(latestP.price ?? row.product.price),
+            },
+            quantity: row.quantity,
+          } as typeof row;
+          return next;
+        })
+      );
     } catch {
       // Network error or similar: do not block user; allow proceeding
     }
