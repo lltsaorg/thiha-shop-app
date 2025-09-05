@@ -522,6 +522,36 @@ export default function PurchasePage() {
     setSelectedProducts([]); // モーダル方式のため空配列へ初期化
   };
 
+  // Preflight to ensure selected items still exist
+  const preflightSelection = async (): Promise<boolean> => {
+    try {
+      const currentIds = new Set(products.map((p) => p.id));
+      const missingNow = selectedProducts.filter(
+        (row) => !currentIds.has(row.product.id)
+      );
+      if (missingNow.length > 0) {
+        const latest = await revalidateProducts();
+        const latestList: any[] = Array.isArray(latest)
+          ? latest
+          : latest?.items ?? [];
+        const latestIds = new Set(latestList.map((p: any) => Number(p.id)));
+        const stillMissing = selectedProducts.filter(
+          (row) => !latestIds.has(row.product.id)
+        );
+        if (stillMissing.length > 0) {
+          setSelectedProducts((prev) =>
+            prev.filter((row) => latestIds.has(row.product.id))
+          );
+          alert("Item deleted from list, select again");
+          return false;
+        }
+      }
+    } catch {
+      // Network error or similar: do not block user; allow proceeding
+    }
+    return true;
+  };
+
   const handlePurchase = async () => {
     const selectedList = getSelectedProductsList();
     const totalPrice = getTotalPrice();
@@ -808,7 +838,9 @@ export default function PurchasePage() {
 
                 {/* 購入ボタン（購入確認モーダルは現状維持） */}
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
+                    const ok = await preflightSelection();
+                    if (!ok) return;
                     const total = getTotalPrice();
                     if (total > 0 && balance < total) {
                       setInsufficientOpen(true);
