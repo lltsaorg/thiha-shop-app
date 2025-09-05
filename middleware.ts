@@ -3,6 +3,21 @@ import { NextResponse, NextRequest } from "next/server";
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
+  // Only guard real page navigations to reduce Edge Requests for assets/XHR
+  // - Method must be GET (HEAD/POST などは素通し)
+  // - Prefer Sec-Fetch headers when available (mode:navigate or dest:document)
+  // - Fallback to Accept: text/html
+  const method = req.method.toUpperCase();
+  if (method !== "GET") return NextResponse.next();
+  const secFetchMode = req.headers.get("sec-fetch-mode") || ""; // e.g., navigate, cors, no-cors
+  const secFetchDest = req.headers.get("sec-fetch-dest") || ""; // e.g., document, script, image
+  const accept = req.headers.get("accept") || "";
+  const isDocNavigation =
+    secFetchMode === "navigate" ||
+    secFetchDest === "document" ||
+    accept.includes("text/html");
+  if (!isDocNavigation) return NextResponse.next();
+
   // Allow the login page and API endpoints to pass
   if (
     pathname === "/admin/login" ||

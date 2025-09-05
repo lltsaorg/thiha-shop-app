@@ -298,8 +298,9 @@ export default function PurchasePage() {
     error: productsError,
     mutate: revalidateProducts,
   } = useSWR("/api/products", fetcher, {
-    revalidateOnFocus: true,
-    dedupingInterval: 3000,
+    // Disable focus-based revalidation to reduce function invocations
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
   });
 
   // Realtime削除: 代わりに BroadcastChannel と SWR の focus/reconnect で更新
