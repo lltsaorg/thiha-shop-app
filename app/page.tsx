@@ -81,6 +81,7 @@ export default function PurchasePage() {
     } catch {}
     try {
       localStorage.removeItem("thiha_phone");
+      localStorage.removeItem("thiha_phone_at");
       localStorage.removeItem("phone");
     } catch {}
     window.location.reload();

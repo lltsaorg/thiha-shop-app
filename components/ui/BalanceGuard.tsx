@@ -5,6 +5,21 @@ import * as React from "react";
 import useSWR from "swr";
 import LoginRegisterGate from "@/components/ui/login-register-gate";
 import { apiFetch } from "@/lib/api";
+import { getSavedPhoneIfFresh } from "@/lib/client-auth";
+
+declare global {
+  interface Window {
+    __THIHA_FALLBACK_MAX_AGE__?: number;
+  }
+}
+
+const getFallbackAgeSec = () => {
+  if (typeof window !== "undefined") {
+    const v = window.__THIHA_FALLBACK_MAX_AGE__;
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return Math.floor(v);
+  }
+  return 60 * 60 * 24 * 7; // default 7 days
+};
 
 const fetcher = async (u: string) => {
   const res = await apiFetch(u, { lockUI: false, cache: "no-store" });
@@ -19,7 +34,7 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
   const [authed, setAuthed] = React.useState<boolean | null>(null);
   const [phone, setPhone] = React.useState<string | null>(null);
 
-  // Check cookie session and capture phone
+  // Check cookie session and capture phone; fallback to saved phone if fresh
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -31,11 +46,26 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
           setAuthed(true);
           if (typeof j?.phone === "string" && j.phone) setPhone(j.phone);
         } else {
-          setAuthed(false);
-          setPhone(null);
+          // Fallback only if within allowed age
+          const saved = getSavedPhoneIfFresh(getFallbackAgeSec());
+          if (saved) {
+            setAuthed(true);
+            setPhone(saved);
+          } else {
+            setAuthed(false);
+            setPhone(null);
+          }
         }
       } catch {
-        if (!cancelled) setAuthed(false);
+        if (!cancelled) {
+          const saved = getSavedPhoneIfFresh(getFallbackAgeSec());
+          if (saved) {
+            setAuthed(true);
+            setPhone(saved);
+          } else {
+            setAuthed(false);
+          }
+        }
       }
     })();
     return () => {

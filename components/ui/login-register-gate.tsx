@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { AuthGateMode } from "@/lib/auth-gate";
 import { apiFetch } from "@/lib/api";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { setSavedPhone } from "@/lib/client-auth";
 
 type Props = {
   onAuthed: (phone: string, balance: number) => void;
@@ -67,7 +68,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
         .finally(() => {
           try {
             localStorage.setItem(MIGRATED_KEY, "1");
-            localStorage.removeItem(PHONE_KEY);
+            // Keep a lightweight fallback for internal use
+            setSavedPhone(saved);
           } catch {}
           setOpen(false);
           onAuthedRef.current(saved, 0);
@@ -149,7 +151,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
         });
         try {
           localStorage.setItem(MIGRATED_KEY, "1");
-          localStorage.removeItem(PHONE_KEY);
+          // Persist a relaxed fallback for internal usage
+          setSavedPhone(normalized);
         } catch {}
         setOpen(false);
         onAuthed(normalized, Number(j.balance ?? 0));
@@ -222,7 +225,8 @@ export default function LoginRegisterGate({ onAuthed }: Props) {
         });
         try {
           localStorage.setItem(MIGRATED_KEY, "1");
-          localStorage.removeItem(PHONE_KEY);
+          // Persist a relaxed fallback for internal usage
+          setSavedPhone(normalized);
         } catch {}
         setOpen(false);
         onAuthed(normalized, Number(j?.balance ?? 0));

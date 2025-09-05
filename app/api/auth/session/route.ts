@@ -7,8 +7,25 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const token = req.cookies.get(USER_COOKIE)?.value || null;
   const v = verifyUserToken(token);
-  if (!v.ok) return NextResponse.json({ ok: false }, { status: 401 });
-  return NextResponse.json({ ok: true, phone: v.phone });
+  if (!v.ok) {
+    return NextResponse.json(
+      { ok: false },
+      {
+        status: 401,
+        headers: {
+          "cache-control": "no-store",
+        },
+      }
+    );
+  }
+  return NextResponse.json(
+    { ok: true, phone: v.phone },
+    {
+      headers: {
+        "cache-control": "no-store",
+      },
+    }
+  );
 }
 
 // Create/update session cookie for given phone
@@ -18,7 +35,14 @@ export async function POST(req: NextRequest) {
   if (!phone) return NextResponse.json({ ok: false, error: "phone required" }, { status: 400 });
 
   const token = createUserToken(phone);
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json(
+    { ok: true },
+    {
+      headers: {
+        "cache-control": "no-store",
+      },
+    }
+  );
   res.cookies.set({
     name: USER_COOKIE,
     value: token,
@@ -30,4 +54,3 @@ export async function POST(req: NextRequest) {
   });
   return res;
 }
-
