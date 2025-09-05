@@ -1,14 +1,14 @@
 // app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
 
-// Node ランタイム（service_role を使う場合の保険）
+// Nodeランタイム（service_roleでDB操作するサーバー専用）
 export const runtime = "nodejs";
 
 type Body = { phone?: string };
 
-// 必要ならフォーマット（先頭ゼロ保持のため文字列のまま）
+// 電話番号を数字と+のみの表記へ正規化
 function normalizePhone(input: string) {
   return input.trim().replace(/[^\d+]/g, "");
 }
@@ -26,30 +26,7 @@ export async function POST(req: Request) {
 
     const phone = normalizePhone(rawPhone);
 
-    // Supabase クライアント生成（service_role があれば優先）
-    const URL =
-      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const KEY =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY;
-
-    if (!URL || !/^https?:\/\//.test(URL)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid SUPABASE_URL" },
-        { status: 500 }
-      );
-    }
-    if (!KEY) {
-      return NextResponse.json(
-        { ok: false, error: "Missing Supabase key" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(URL, KEY);
-
-    // 既存ユーザーの確認（※ カラム名は Users の実体に合わせる）
+    // 既存チェック（既存なら1クエリで返す）
     const { data: existing, error: findErr } = await supabase
       .from("Users")
       .select("phone_number,balance")
@@ -64,7 +41,6 @@ export async function POST(req: Request) {
     }
 
     if (existing) {
-      // 既に登録済み → そのまま balance を返す（created=false/exists=true を付与）
       return NextResponse.json(
         {
           ok: true,
@@ -77,8 +53,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 新規作成（ここで "name" など存在しないカラムは一切送らない）
-    // Enqueue per phone to avoid race on same phone; allow parallel for different phones
+    // 同一電話番号の同時登録を直列化（他の電話番号は並列可）
     const queue = getQueue(`register:${phone}`, 1, 200);
     try {
       const resp = await queue.add(async () => {
