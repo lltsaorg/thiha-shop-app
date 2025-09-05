@@ -37,7 +37,14 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
   // Check cookie session and capture phone; fallback to saved phone if fresh
   React.useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    // Optimistic: if local fallback exists, assume authed immediately to avoid flicker
+    try {
+      const saved0 = getSavedPhoneIfFresh(getFallbackAgeSec());
+      if (saved0) {
+        setAuthed(true);
+        setPhone(saved0);
+      }
+    } catch {}
     (async () => {
       try {
         const r = await fetch("/api/auth/session", { cache: "no-store" });
@@ -57,18 +64,8 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
             setAuthed(true);
             setPhone(saved);
           } else {
-            // Grace delay (avoid flicker): wait briefly then decide
-            timer = setTimeout(() => {
-              if (cancelled) return;
-              const saved2 = getSavedPhoneIfFresh(getFallbackAgeSec());
-              if (saved2) {
-                setAuthed(true);
-                setPhone(saved2);
-              } else {
-                setAuthed(false);
-                setPhone(null);
-              }
-            }, 150);
+            setAuthed(false);
+            setPhone(null);
           }
         }
       } catch {
@@ -78,24 +75,13 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
             setAuthed(true);
             setPhone(saved);
           } else {
-            // Grace delay on error as well
-            timer = setTimeout(() => {
-              if (cancelled) return;
-              const saved2 = getSavedPhoneIfFresh(getFallbackAgeSec());
-              if (saved2) {
-                setAuthed(true);
-                setPhone(saved2);
-              } else {
-                setAuthed(false);
-              }
-            }, 150);
+            setAuthed(false);
           }
         }
       }
     })();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
     };
   }, []);
 
@@ -118,6 +104,5 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
 
   if (authed === null) return null; // or a lightweight spinner
   if (!authed) return <LoginRegisterGate onAuthed={handleAuthed} />;
-  if (data && data.exists === false) return <LoginRegisterGate onAuthed={handleAuthed} />;
   return <>{children}</>;
 }

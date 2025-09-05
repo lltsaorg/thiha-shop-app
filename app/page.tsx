@@ -29,7 +29,7 @@ import {
 } from "@/components/SelectedItemsProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSavedPhone } from "@/lib/client-auth";
+import { getSavedPhone, setSavedPhone } from "@/lib/client-auth";
 import useSWR, { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { apiFetch } from "@/lib/api";
@@ -112,7 +112,7 @@ export default function PurchasePage() {
         if (r.ok) {
           const j = await r.json();
           if (j?.phone) {
-            try { localStorage.setItem("thiha_phone", j.phone); } catch {}
+            try { setSavedPhone(j.phone); } catch {}
             setPhone(j.phone);
             return;
           }
