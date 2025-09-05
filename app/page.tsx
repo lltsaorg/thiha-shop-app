@@ -42,6 +42,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // (Realtime removed per cost concerns)
+import { supabaseBrowser } from "@/lib/supabase-browser";
 
 type Product = { id: number; name: string; price: number };
 // ✅ 修正点：選択済みは product オブジェクト＋Qtyで保持（編集/削除しやすく）
@@ -319,26 +320,48 @@ export default function PurchasePage() {
     }));
   }, [productsRaw]);
 
-  // Balance変更のリアルタイム反映（管理側承認など）
+  // Balance: minimal Supabase Realtime subscription (Users UPDATE for this phone)
+  // Subscribe only when visible to reduce message usage; rely on focus refresh otherwise
   useEffect(() => {
-    const bc = new BroadcastChannel("thiha-shop");
-    const onMsg = (e: MessageEvent<any>) => {
-      const msg = e.data || {};
-      if (!balanceKey) return;
-      if (msg.type === "BALANCE_CHANGED_ALL") {
-        mutate(balanceKey);
-        return;
-      }
-      if (msg.type === "BALANCE_CHANGED") {
-        const m = String(msg.phone || "").replace(/\D/g, "");
-        if (!normalizedPhone || m === normalizedPhone) {
-          mutate(balanceKey);
-        }
+    const sb = supabaseBrowser;
+    if (!sb) return;
+    if (!normalizedPhone || !balanceKey) return;
+    if (document.visibilityState !== "visible") return;
+
+    let debounceTimer: number | null = null;
+    const onChange = () => {
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => mutate(balanceKey), 300);
+    };
+
+    const channel = sb
+      .channel(`user-balance-${normalizedPhone}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "Users",
+          filter: `phone_number=eq.${normalizedPhone}`,
+        },
+        onChange
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        if (debounceTimer != null) window.clearTimeout(debounceTimer);
+        sb.removeChannel(channel);
       }
     };
-    bc.addEventListener("message", onMsg);
-    return () => bc.removeEventListener("message", onMsg);
-  }, [mutate, balanceKey, normalizedPhone]);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+  }, [normalizedPhone, balanceKey, mutate]);
 
   // ====== 修正点：検索対象のフィルタリング（選択済みを除外） ======
   const filteredProducts: Product[] = useMemo(() => {

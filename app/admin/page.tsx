@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatYGNMinute } from "@/lib/utils";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { supabaseBrowser } from "@/lib/supabase-browser";
 
 // Analytics external links from env (client-side)
 const ANALYTICS_SPREADSHEET_URL =
@@ -165,34 +166,58 @@ export default function AdminPage() {
     };
   }, [activeTab, crDirty, loadChargeRequests]);
 
-  // BroadcastChannel で変更検知
+  // Minimal Supabase Realtime: ChargeRequests INSERT and approved UPDATE
   useEffect(() => {
-    const bc = new BroadcastChannel("thiha-shop");
-    const onMsg = (e: MessageEvent<any>) => {
-      const msg = e.data || {};
-      if (msg.type === "CR_CHANGED") {
-        setCrDirty(true);
-        if (activeTab === "charge" && document.visibilityState === "visible") {
-          loadChargeRequests({ reset: true });
-          setCrDirty(false);
-        }
-      }
-      if (msg.type === "BALANCE_CHANGED" && msg.phone) {
-        const key = `/api/balance?phone=${encodeURIComponent(
-          normalizePhone(msg.phone)
-        )}`;
-        mutate(key);
-      }
-      if (msg.type === "BALANCE_CHANGED_ALL") {
-        mutate(
-          (key) =>
-            typeof key === "string" && key.startsWith("/api/balance?phone=")
-        );
+    const sb = supabaseBrowser;
+    if (!sb) return;
+
+    // subscribe only when Charge tab is active and page is visible
+    if (activeTab !== "charge" || document.visibilityState !== "visible") return;
+
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      setCrDirty(true);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadChargeRequests({ reset: true });
+        setCrDirty(false);
+      }, 300);
+    };
+
+    const channel = sb
+      .channel("admin-charge-requests")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "ChargeRequests" },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "ChargeRequests",
+          filter: "approved=eq.true",
+        },
+        scheduleRefresh
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        sb.removeChannel(channel);
+        if (refreshTimer != null) window.clearTimeout(refreshTimer);
       }
     };
-    bc.addEventListener("message", onMsg);
-    return () => bc.removeEventListener("message", onMsg);
-  }, [mutate, loadChargeRequests, activeTab]);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loadChargeRequests]);
 
   // フォーカス/可視化時に最新化（変更があった場合のみ）
   useEffect(() => {
@@ -238,29 +263,7 @@ export default function AdminPage() {
       });
       const result = await response.json();
       if (result.success) {
-        await loadChargeRequests({ reset: true });
-        const key = `/api/balance?phone=${encodeURIComponent(
-          normalizePhone(req.phone)
-        )}`;
-        mutate(
-          key,
-          (prev: any) => {
-            const cur = Number(prev?.balance ?? 0);
-            return {
-              ...(prev ?? { exists: true }),
-              balance: cur + Number(req.amount || 0),
-            };
-          },
-          { revalidate: false }
-        );
-        mutate(key);
-        new BroadcastChannel("thiha-shop").postMessage({
-          type: "BALANCE_CHANGED",
-          phone: req.phone,
-        });
-        new BroadcastChannel("thiha-shop").postMessage({
-          type: "CR_CHANGED",
-        });
+        // Realtime on ChargeRequests will refresh the list; no manual reload/broadcast
         setNotification("Approved the request.");
         setTimeout(() => setNotification(""), 3000);
       } else {

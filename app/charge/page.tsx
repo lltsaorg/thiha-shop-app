@@ -93,8 +93,7 @@ export default function ChargePage() {
       });
       setShowProof(true);
 
-      // 管理者画面の一覧を更新させる（同端末間通知）
-      new BroadcastChannel("thiha-shop").postMessage({ type: "CR_CHANGED" });
+      // Admin Charge Requests will refresh via Supabase Realtime
     } catch (e) {
       setError("Fail to request");
     } finally {
