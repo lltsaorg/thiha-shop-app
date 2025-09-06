@@ -172,7 +172,8 @@ export default function AdminPage() {
     if (!sb) return;
 
     // subscribe only when Charge tab is active and page is visible
-    if (activeTab !== "charge" || document.visibilityState !== "visible") return;
+    if (activeTab !== "charge" || document.visibilityState !== "visible")
+      return;
 
     let refreshTimer: number | null = null;
     const scheduleRefresh = () => {
@@ -444,7 +445,7 @@ export default function AdminPage() {
             className="h-16 flex flex-col gap-1"
           >
             <CreditCard className="w-6 h-6" />
-            <span>Charge Requests</span>
+            <span>Top-up</span>
           </Button>
           <Button
             variant={activeTab === "products" ? "default" : "outline"}
@@ -468,7 +469,7 @@ export default function AdminPage() {
         {activeTab === "charge" && (
           <Card className="max-h-[75vh] flex flex-col overflow-hidden">
             <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg font-black">Charge Requests</CardTitle>
+              <CardTitle className="text-lg font-black">Requests</CardTitle>
               <div className="flex items-center gap-2">
                 {crDirty && (
                   <Badge
@@ -499,7 +500,9 @@ export default function AdminPage() {
                 className="flex-1 flex flex-col w-full min-h-0"
               >
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="pending">Pending ({pendingRequests.length})</TabsTrigger>
+                  <TabsTrigger value="pending">
+                    Pending ({pendingRequests.length})
+                  </TabsTrigger>
                   <TabsTrigger value="processed">Done</TabsTrigger>
                 </TabsList>
                 {/* 電話番号検索（両タブ共通） */}
@@ -522,7 +525,9 @@ export default function AdminPage() {
                   className="flex-1 flex flex-col overflow-hidden mt-6 min-h-0"
                 >
                   {visiblePendingRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">No pending requests.</div>
+                    <div className="text-center py-8 text-muted-foreground">
+                      No pending requests.
+                    </div>
                   ) : (
                     <div
                       className="flex-1 overflow-y-auto pr-2"
@@ -551,7 +556,9 @@ export default function AdminPage() {
                                       Pending
                                     </Badge>
                                   </div>
-                                  <div className="text-sm font-semibold text-muted-foreground">Amount: {request.amount.toLocaleString()}ks</div>
+                                  <div className="text-sm font-semibold text-muted-foreground">
+                                    Amount: {request.amount.toLocaleString()}ks
+                                  </div>
                                   <div className="text-xs text-muted-foreground">
                                     <span className="text-sm font-semibold">
                                       {formatYGNMinute(request.requested_at)}
@@ -577,7 +584,10 @@ export default function AdminPage() {
                   {/* もっと見る（承認待ちタブ内） */}
                   {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
-                      <Button onClick={() => loadChargeRequests()} disabled={loadingCR}>
+                      <Button
+                        onClick={() => loadChargeRequests()}
+                        disabled={loadingCR}
+                      >
                         Load more
                       </Button>
                     </div>
@@ -590,7 +600,9 @@ export default function AdminPage() {
                   className="flex-1 flex flex-col overflow-hidden mt-6 min-h-0"
                 >
                   {visibleProcessedRequests.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">No done requests.</div>
+                    <div className="text-center py-8 text-muted-foreground">
+                      No done requests.
+                    </div>
                   ) : (
                     <div
                       className="flex-1 overflow-y-auto pr-2"
@@ -625,9 +637,12 @@ export default function AdminPage() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="text-sm text-muted-foreground">Amount: {request.amount.toLocaleString()}ks</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Amount: {request.amount.toLocaleString()}ks
+                                  </div>
                                   <div className="text-xs text-muted-foreground">
-                                    Requested: {formatYGNMinute(request.requested_at)} |
+                                    Requested:{" "}
+                                    {formatYGNMinute(request.requested_at)} |
                                     Approved:
                                     {request.approved
                                       ? formatYGNMinute(request.approved_at)
@@ -795,7 +810,9 @@ export default function AdminPage() {
               </div>
 
               {filteredProducts.length === 0 && searchTerm && (
-                <div className="text-center py-8 text-muted-foreground">No products found for "{searchTerm}".</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  No products found for "{searchTerm}".
+                </div>
               )}
 
               {/* 単一・制御モーダル：編集 */}
@@ -880,10 +897,10 @@ export default function AdminPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      Open Spreadsheet
+                      Open Sheet & Dashboard
                     </a>
                   </Button>
-                  <Button asChild size="lg" className="h-12 px-8 text-lg">
+                  {/* <Button asChild size="lg" className="h-12 px-8 text-lg">
                     <a
                       href={ANALYTICS_DASHBOARD_URL}
                       target="_blank"
@@ -891,7 +908,7 @@ export default function AdminPage() {
                     >
                       Open Dashboard
                     </a>
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
             </CardContent>
