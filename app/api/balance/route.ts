@@ -1,8 +1,9 @@
 // /app/api/balance/route.ts
-import { getBalanceFast } from "@/lib/db";
+import { getBalanceFast, BAL_TTL } from "@/lib/db";
 import { USER_COOKIE, verifyUserToken } from "@/lib/user-session";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   let phone = new URL(req.url).searchParams.get("phone")?.trim();
@@ -32,6 +33,8 @@ export async function GET(req: Request) {
         "content-type": "application/json",
         // Avoid stale CDN/browser cache after purchase
         "cache-control": "no-store",
+        "x-bal-ttl": String(BAL_TTL),
+        "x-server-time": new Date().toISOString(),
       },
     });
   }
@@ -50,6 +53,8 @@ export async function GET(req: Request) {
         "content-type": "application/json",
         // Avoid stale CDN/browser cache after purchase
         "cache-control": "no-store",
+        "x-bal-ttl": String(BAL_TTL),
+        "x-server-time": new Date().toISOString(),
       },
     }
   );
