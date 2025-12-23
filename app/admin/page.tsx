@@ -663,9 +663,9 @@ export default function AdminPage() {
                             className="border-2 border-primary/20 py-2 gap-2"
                           >
                             <CardContent className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0 space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <span className="font-semibold">
                                       {request.phone}
                                     </span>
@@ -691,7 +691,7 @@ export default function AdminPage() {
                                 <Button
                                   onClick={() => handleApprove(request)}
                                   size="sm"
-                                  className="h-8"
+                                  className="h-8 w-full sm:w-auto"
                                   disabled={isLoading}
                                 >
                                   <Check className="w-4 h-4 mr-1" />
