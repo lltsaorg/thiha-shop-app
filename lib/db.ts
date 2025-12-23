@@ -24,6 +24,7 @@ export const supabase = createClient(
 );
 
 export const BAL_TTL = Number(process.env.BALANCE_CACHE_TTL_MS ?? 2000);
+export const TOTAL_BAL_TTL = Number(process.env.TOTAL_BALANCE_CACHE_TTL_MS ?? 2000);
 
 export async function findUserByPhone(phone: string) {
   const { data, error } = await supabase
@@ -77,5 +78,30 @@ export async function getBalanceFast(phone: string) {
 
 export function invalidateBalanceCache(phone: string) {
   delCache(`bal:${phone}`);
+  delCache("users:total_balance");
+}
+
+export async function getTotalUserBalanceFast(): Promise<number> {
+  // TTL <= 0 の場合はキャッシュを完全にバイパスし、常にDB直読
+  if (TOTAL_BAL_TTL <= 0) return await getTotalUserBalance();
+  return cached<number>("users:total_balance", TOTAL_BAL_TTL, getTotalUserBalance);
+}
+
+async function getTotalUserBalance(): Promise<number> {
+  const pageSize = 1000;
+  let offset = 0;
+  let total = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("Users")
+      .select("balance")
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const row of rows as any[]) total += Number(row?.balance ?? 0);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return total;
 }
 

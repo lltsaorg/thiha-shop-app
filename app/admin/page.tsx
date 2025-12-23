@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useSWRConfig } from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import useSWRImmutable from "swr/immutable";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetcher } from "@/lib/fetcher";
@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +72,21 @@ export default function AdminPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [usersDirty, setUsersDirty] = useState(false);
+
+  const totalBalanceKey =
+    activeTab === "charge" ? "/api/admin/total-balance" : null;
+  const {
+    data: totalBalanceSnap,
+    isLoading: loadingTotalBalance,
+    isValidating: validatingTotalBalance,
+  } = useSWR(
+    totalBalanceKey,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+    }
+  );
 
   // 商品は immutable
   const {
@@ -220,6 +236,97 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, loadChargeRequests]);
 
+  // Minimal Supabase Realtime: Users UPDATE/INSERT/DELETE (total balance)
+  useEffect(() => {
+    const sb = supabaseBrowser;
+    if (!sb) return;
+    if (activeTab !== "charge" || document.visibilityState !== "visible")
+      return;
+
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      setUsersDirty(true);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        mutate("/api/admin/total-balance");
+        setUsersDirty(false);
+      }, 300);
+    };
+
+    const channel = sb
+      .channel("admin-users-total-balance")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "Users" },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Users" },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "Users" },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Transactions" },
+        scheduleRefresh
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        sb.removeChannel(channel);
+        if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, mutate]);
+
+  // Other tabs (purchase screen) -> refresh total balance
+  useEffect(() => {
+    const bc = new BroadcastChannel("thiha-shop");
+    const onMessage = (ev: MessageEvent) => {
+      const msg: any = (ev as any)?.data;
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "BALANCE_CHANGED") {
+        mutate("/api/admin/total-balance");
+      }
+    };
+    bc.addEventListener("message", onMessage);
+    return () => {
+      bc.removeEventListener("message", onMessage);
+      bc.close();
+    };
+  }, [mutate]);
+
+  // フォーカス/可視化時に最新化（変更があった場合のみ）: total balance
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "charge") return;
+      if (usersDirty) {
+        mutate("/api/admin/total-balance");
+        setUsersDirty(false);
+      }
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, usersDirty, mutate]);
+
   // フォーカス/可視化時に最新化（変更があった場合のみ）
   useEffect(() => {
     const maybeRefresh = () => {
@@ -264,6 +371,7 @@ export default function AdminPage() {
       });
       const result = await response.json();
       if (result.success) {
+        mutate("/api/admin/total-balance");
         // Realtime on ChargeRequests will refresh the list; no manual reload/broadcast
         setNotification("Approved the request.");
         setTimeout(() => setNotification(""), 3000);
@@ -465,6 +573,23 @@ export default function AdminPage() {
           </Button>
         </div>
 
+        {activeTab === "charge" && (
+          <div className="mb-4 flex flex-col items-end text-right gap-1">
+            <p className="text-sm text-muted-foreground sm:text-lg">
+              Total balance (all users)
+            </p>
+            <p className="text-xl font-black tabular-nums inline-flex items-center justify-end whitespace-nowrap">
+              {loadingTotalBalance || validatingTotalBalance ? (
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-4" />
+              ) : (
+                `${Number(
+                  totalBalanceSnap?.total_balance ?? 0
+                ).toLocaleString()}ks`
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Charge Request Management（このカード内だけ縦スクロール） */}
         {activeTab === "charge" && (
           <Card className="max-h-[75vh] flex flex-col overflow-hidden">
@@ -482,7 +607,9 @@ export default function AdminPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadChargeRequests({ reset: true })}
+                  onClick={() => {
+                    loadChargeRequests({ reset: true });
+                  }}
                   disabled={loadingCR}
                   aria-busy={loadingCR}
                 >
@@ -540,9 +667,9 @@ export default function AdminPage() {
                             className="border-2 border-primary/20 py-2 gap-2"
                           >
                             <CardContent className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0 space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <span className="font-semibold">
                                       {request.phone}
                                     </span>
@@ -568,7 +695,7 @@ export default function AdminPage() {
                                 <Button
                                   onClick={() => handleApprove(request)}
                                   size="sm"
-                                  className="h-8"
+                                  className="h-8 w-full sm:w-auto"
                                   disabled={isLoading}
                                 >
                                   <Check className="w-4 h-4 mr-1" />

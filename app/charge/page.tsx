@@ -14,7 +14,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { apiFetch } from "@/lib/api";
 import { formatYGNMinute } from "@/lib/utils";
 
-const PRESETS = [1000, 3000, 5000, 10000];
+const PRESETS = [1000, 2000, 5000, 10000];
 
 type ProofData = {
   phoneLastFour: string;
@@ -51,7 +51,9 @@ export default function ChargePage() {
         if (r.ok) {
           const j = await r.json();
           if (j?.phone) {
-            try { setSavedPhone(j.phone); } catch {}
+            try {
+              setSavedPhone(j.phone);
+            } catch {}
             setPhone(j.phone);
             return;
           }
