@@ -76,7 +76,11 @@ export default function AdminPage() {
 
   const totalBalanceKey =
     activeTab === "charge" ? "/api/admin/total-balance" : null;
-  const { data: totalBalanceSnap, isLoading: loadingTotalBalance } = useSWR(
+  const {
+    data: totalBalanceSnap,
+    isLoading: loadingTotalBalance,
+    isValidating: validatingTotalBalance,
+  } = useSWR(
     totalBalanceKey,
     fetcher,
     {
@@ -367,6 +371,7 @@ export default function AdminPage() {
       });
       const result = await response.json();
       if (result.success) {
+        mutate("/api/admin/total-balance");
         // Realtime on ChargeRequests will refresh the list; no manual reload/broadcast
         setNotification("Approved the request.");
         setTimeout(() => setNotification(""), 3000);
@@ -574,7 +579,7 @@ export default function AdminPage() {
               Total balance (all users)
             </p>
             <p className="text-xl font-black tabular-nums inline-flex items-center justify-end whitespace-nowrap">
-              {loadingTotalBalance ? (
+              {loadingTotalBalance || validatingTotalBalance ? (
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-4" />
               ) : (
                 `${Number(
@@ -603,7 +608,6 @@ export default function AdminPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    mutate("/api/admin/total-balance");
                     loadChargeRequests({ reset: true });
                   }}
                   disabled={loadingCR}
