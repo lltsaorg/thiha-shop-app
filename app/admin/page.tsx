@@ -74,7 +74,10 @@ export default function AdminPage() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [usersDirty, setUsersDirty] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminChargeRequest | null>(
-    null
+    null,
+  );
+  const [cancelTarget, setCancelTarget] = useState<AdminChargeRequest | null>(
+    null,
   );
 
   const totalBalanceKey =
@@ -83,13 +86,9 @@ export default function AdminPage() {
     data: totalBalanceSnap,
     isLoading: loadingTotalBalance,
     isValidating: validatingTotalBalance,
-  } = useSWR(
-    totalBalanceKey,
-    fetcher,
-    {
-      revalidateOnFocus: true,
-    }
-  );
+  } = useSWR(totalBalanceKey, fetcher, {
+    revalidateOnFocus: true,
+  });
 
   // 商品は immutable
   const {
@@ -98,7 +97,7 @@ export default function AdminPage() {
     mutate: refetchProducts,
   } = useSWRImmutable("/api/products", fetcher);
 
-  // チャージリクエストはページング（「もっと見る」方式）
+  // チャージリクエストはページング（「Load more」方式）
   const PAGE_SIZE = 50;
   const [crItems, setCrItems] = useState<AdminChargeRequest[]>([]);
   const [crOffset, setCrOffset] = useState(0);
@@ -119,7 +118,7 @@ export default function AdminPage() {
       requested_at: r.requested_at ?? r.createdAt ?? r.created_at ?? "",
       approved_at: r.approved_at ?? r.approvedAt ?? "",
       currentBalance: Number(
-        r.currentBalance ?? r.balance ?? r.Users?.balance ?? 0
+        r.currentBalance ?? r.balance ?? r.Users?.balance ?? 0,
       ),
     }));
 
@@ -131,13 +130,13 @@ export default function AdminPage() {
       try {
         const res = await apiFetch(
           `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}`,
-          { lockUI: false, cache: "no-store" }
+          { lockUI: false, cache: "no-store" },
         );
         const json = await res.json().catch(() => ({}));
-        const raw = Array.isArray(json) ? json : json?.items ?? [];
+        const raw = Array.isArray(json) ? json : (json?.items ?? []);
         const normalized = normalizeRequests(raw);
         setCrItems((prev) =>
-          opts?.reset ? normalized : [...prev, ...normalized]
+          opts?.reset ? normalized : [...prev, ...normalized],
         );
         setCrOffset(nextOffset + normalized.length);
         setCrHasMore(normalized.length >= PAGE_SIZE);
@@ -148,7 +147,7 @@ export default function AdminPage() {
         setCrLoaded(true);
       }
     },
-    [loadingCR, crOffset, PAGE_SIZE]
+    [loadingCR, crOffset, PAGE_SIZE],
   );
 
   // タブが charge の時に初回ロード（StrictMode でも一度だけ）
@@ -209,7 +208,7 @@ export default function AdminPage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "ChargeRequests" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
@@ -219,12 +218,12 @@ export default function AdminPage() {
           table: "ChargeRequests",
           filter: "approved=eq.true",
         },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "ChargeRequests" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .subscribe();
 
@@ -266,22 +265,22 @@ export default function AdminPage() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "Users" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Users" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "Users" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Transactions" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .subscribe();
 
@@ -355,7 +354,7 @@ export default function AdminPage() {
 
   // products 整形
   const products: any[] = (
-    Array.isArray(productsRaw) ? productsRaw : productsRaw?.items ?? []
+    Array.isArray(productsRaw) ? productsRaw : (productsRaw?.items ?? [])
   ).map((p: any) => ({
     id: p.id ?? p.uuid,
     name: p.name,
@@ -416,6 +415,36 @@ export default function AdminPage() {
     } catch (error) {
       console.error("Reject failed:", error);
       setNotification("Reject failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelApproved = async (req: AdminChargeRequest) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/charge-requests", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: req.id, mode: "cancel-approved" }),
+        waitMessage: "Processing, please wait...",
+        retryOn429: true,
+        max429Retries: 6,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setCancelTarget(null);
+        mutate("/api/admin/total-balance");
+        setNotification("Approval canceled.");
+        setTimeout(() => setNotification(""), 3000);
+      } else {
+        setNotification(result?.error ?? "Cancel failed.");
+        setTimeout(() => setNotification(""), 4000);
+      }
+    } catch (error) {
+      console.error("Cancel approved failed:", error);
+      setNotification("Cancel failed.");
       setTimeout(() => setNotification(""), 3000);
     } finally {
       setIsLoading(false);
@@ -525,7 +554,7 @@ export default function AdminPage() {
   };
 
   const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
   const pendingRequests = requests.filter((req) => !req.approved);
   const processedRequests = requests.filter((req) => req.approved);
@@ -535,10 +564,10 @@ export default function AdminPage() {
   const matchPhone = (p: string) =>
     !phoneQuery || normalizePhone(p).includes(phoneQuery);
   const visiblePendingRequests = pendingRequests.filter((r) =>
-    matchPhone(r.phone)
+    matchPhone(r.phone),
   );
   const visibleProcessedRequests = processedRequests.filter((r) =>
-    matchPhone(r.phone)
+    matchPhone(r.phone),
   );
 
   return (
@@ -617,7 +646,7 @@ export default function AdminPage() {
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-4" />
               ) : (
                 `${Number(
-                  totalBalanceSnap?.total_balance ?? 0
+                  totalBalanceSnap?.total_balance ?? 0,
                 ).toLocaleString()}ks`
               )}
             </p>
@@ -754,7 +783,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                   )}
-                  {/* もっと見る（承認待ちタブ内） */}
+                  {/* Load more（承認待ちタブ内） */}
                   {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
@@ -785,8 +814,8 @@ export default function AdminPage() {
                         {visibleProcessedRequests.map((request) => (
                           <Card key={request.id} className="py-2 gap-2">
                             <CardContent className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="space-y-1">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="space-y-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <span className="font-semibold">
                                       {request.phone}
@@ -822,6 +851,18 @@ export default function AdminPage() {
                                       : "-"}
                                   </div>
                                 </div>
+                                <div className="flex w-full gap-2 sm:w-auto">
+                                  <Button
+                                    onClick={() => setCancelTarget(request)}
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                    disabled={isLoading}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" />
+                                    Cancel
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -829,14 +870,14 @@ export default function AdminPage() {
                       </div>
                     </div>
                   )}
-                  {/* もっと見る（処理済みタブ内） */}
+                  {/* Load more（処理済みタブ内） */}
                   {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
                         onClick={() => loadChargeRequests()}
                         disabled={loadingCR}
                       >
-                        もっと見る
+                        Load more
                       </Button>
                     </div>
                   )}
@@ -845,6 +886,29 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         )}
+
+        <ConfirmModal
+          open={!!cancelTarget}
+          onOpenChange={(open) => {
+            if (!open) setCancelTarget(null);
+          }}
+          title="Cancel approval?"
+          description="This will subtract the amount and delete the request."
+          confirmLabel="Cancel approval"
+          cancelLabel="Keep"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (cancelTarget) handleCancelApproved(cancelTarget);
+          }}
+        >
+          {cancelTarget && (
+            <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
+              <div>Phone: {cancelTarget.phone}</div>
+              <div>ID: {cancelTarget.id}</div>
+              <div>Amount: {cancelTarget.amount.toLocaleString()}ks</div>
+            </div>
+          )}
+        </ConfirmModal>
 
         {/* Products tab */}
         {activeTab === "products" && (

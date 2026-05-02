@@ -189,10 +189,12 @@ export async function PUT(req: Request) {
   }
 }
 
-// DELETE: reject pending charge request {id}
+// DELETE:
+// - reject pending charge request {id}
+// - cancel approved charge request {id, mode:"cancel-approved"}
 export async function DELETE(req: Request) {
   try {
-    const { id } = await req.json().catch(() => ({}));
+    const { id, mode } = await req.json().catch(() => ({}));
     if (id == null)
       return json({ success: false, error: "id is required" }, 400);
 
@@ -202,11 +204,90 @@ export async function DELETE(req: Request) {
 
     const { data: reqData, error: reqErr } = await supabase
       .from("ChargeRequests")
-      .select("id,approved")
+      .select("id,user_id,amount,approved")
       .eq("id", idNum)
       .maybeSingle();
     if (reqErr || !reqData)
       return json({ success: false, error: "not found" }, 404);
+
+    if (mode === "cancel-approved") {
+      if (!reqData.approved)
+        return json(
+          { success: false, error: "only approved requests can be canceled" },
+          409
+        );
+
+      const userId = reqData.user_id as string | number;
+      const amount = Number(reqData.amount ?? 0);
+      const queue = getQueue(`user:${userId}`, 1, 1000);
+
+      try {
+        const resp = await queue.add(async () => {
+          const { data: user, error: userErr } = await supabase
+            .from("Users")
+            .select("phone_number,balance")
+            .eq("id", userId)
+            .maybeSingle();
+          if (userErr || !user)
+            return json({ success: false, error: "user not found" }, 404);
+
+          const currentBalance = Number(user.balance ?? 0);
+          if (currentBalance < amount) {
+            return json(
+              {
+                success: false,
+                error: "Balance is too low. Top up first to cancel this approval.",
+              },
+              409
+            );
+          }
+
+          const newBalance = currentBalance - amount;
+
+          const { error: userUpdateErr } = await supabase
+            .from("Users")
+            .update({ balance: newBalance })
+            .eq("id", userId);
+          if (userUpdateErr)
+            return json({ success: false, error: userUpdateErr.message }, 500);
+
+          const { error: deleteErr } = await supabase
+            .from("ChargeRequests")
+            .delete()
+            .eq("id", idNum)
+            .eq("approved", true);
+          if (deleteErr) {
+            await supabase
+              .from("Users")
+              .update({ balance: currentBalance })
+              .eq("id", userId);
+            return json({ success: false, error: deleteErr.message }, 500);
+          }
+
+          invalidateBalanceCache(user.phone_number as string);
+          return json({ success: true, balance: newBalance }, 200);
+        });
+        return resp;
+      } catch (e: any) {
+        if (e?.code === "QUEUE_LIMIT")
+          return new Response(
+            JSON.stringify({ success: false, error: "Processing" }),
+            {
+              status: 429,
+              headers: {
+                "content-type": "application/json",
+                "cache-control": "no-store",
+                "x-wait-reason": "Processing, please wait...",
+              },
+            }
+          );
+        return json(
+          { success: false, error: e?.message ?? "cancel failed" },
+          500
+        );
+      }
+    }
+
     if (reqData.approved)
       return json(
         { success: false, error: "approved request cannot be rejected" },
@@ -223,7 +304,7 @@ export async function DELETE(req: Request) {
 
     return json({ success: true }, 200);
   } catch (e: any) {
-    return json({ success: false, error: e?.message ?? "reject failed" }, 500);
+    return json({ success: false, error: e?.message ?? "delete failed" }, 500);
   }
 }
 
