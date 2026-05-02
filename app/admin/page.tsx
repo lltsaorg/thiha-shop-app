@@ -73,6 +73,9 @@ export default function AdminPage() {
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [usersDirty, setUsersDirty] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<AdminChargeRequest | null>(
+    null
+  );
 
   const totalBalanceKey =
     activeTab === "charge" ? "/api/admin/total-balance" : null;
@@ -216,6 +219,11 @@ export default function AdminPage() {
           table: "ChargeRequests",
           filter: "approved=eq.true",
         },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "ChargeRequests" },
         scheduleRefresh
       )
       .subscribe();
@@ -382,6 +390,32 @@ export default function AdminPage() {
     } catch (error) {
       console.error("Approval failed:", error);
       setNotification("Approve failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReject = async (req: AdminChargeRequest) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/charge-requests", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: req.id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setRejectTarget(null);
+        setNotification("Rejected the request.");
+        setTimeout(() => setNotification(""), 3000);
+      } else {
+        setNotification(result?.error ?? "Reject failed.");
+        setTimeout(() => setNotification(""), 3000);
+      }
+    } catch (error) {
+      console.error("Reject failed:", error);
+      setNotification("Reject failed.");
       setTimeout(() => setNotification(""), 3000);
     } finally {
       setIsLoading(false);
@@ -692,15 +726,27 @@ export default function AdminPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <Button
-                                  onClick={() => handleApprove(request)}
-                                  size="sm"
-                                  className="h-8 w-full sm:w-auto"
-                                  disabled={isLoading}
-                                >
-                                  <Check className="w-4 h-4 mr-1" />
-                                  Approve
-                                </Button>
+                                <div className="flex w-full gap-2 sm:w-auto">
+                                  <Button
+                                    onClick={() => setRejectTarget(request)}
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                    disabled={isLoading}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" />
+                                    Reject
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleApprove(request)}
+                                    size="sm"
+                                    className="h-8 flex-1 sm:flex-none"
+                                    disabled={isLoading}
+                                  >
+                                    <Check className="w-4 h-4 mr-1" />
+                                    Approve
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -1009,6 +1055,26 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         )}
+
+        <ConfirmModal
+          open={!!rejectTarget}
+          onOpenChange={(open) => {
+            if (!open) setRejectTarget(null);
+          }}
+          title="Reject this request?"
+          description={
+            rejectTarget
+              ? `This will reject and delete request ID ${rejectTarget.id} for ${rejectTarget.phone} / ${rejectTarget.amount.toLocaleString()}ks.`
+              : undefined
+          }
+          confirmLabel="Reject"
+          cancelLabel="Cancel"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (!rejectTarget) return;
+            return handleReject(rejectTarget);
+          }}
+        />
 
         {activeTab === "analytics" && (
           <Card>

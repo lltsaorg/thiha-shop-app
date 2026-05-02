@@ -189,6 +189,44 @@ export async function PUT(req: Request) {
   }
 }
 
+// DELETE: reject pending charge request {id}
+export async function DELETE(req: Request) {
+  try {
+    const { id } = await req.json().catch(() => ({}));
+    if (id == null)
+      return json({ success: false, error: "id is required" }, 400);
+
+    const idNum = Number(id);
+    if (!Number.isFinite(idNum))
+      return json({ success: false, error: "invalid id" }, 400);
+
+    const { data: reqData, error: reqErr } = await supabase
+      .from("ChargeRequests")
+      .select("id,approved")
+      .eq("id", idNum)
+      .maybeSingle();
+    if (reqErr || !reqData)
+      return json({ success: false, error: "not found" }, 404);
+    if (reqData.approved)
+      return json(
+        { success: false, error: "approved request cannot be rejected" },
+        409
+      );
+
+    const { error: deleteErr } = await supabase
+      .from("ChargeRequests")
+      .delete()
+      .eq("id", idNum)
+      .eq("approved", false);
+    if (deleteErr)
+      return json({ success: false, error: deleteErr.message }, 500);
+
+    return json({ success: true }, 200);
+  } catch (e: any) {
+    return json({ success: false, error: e?.message ?? "reject failed" }, 500);
+  }
+}
+
 export async function OPTIONS() {
   return new Response(null, { status: 204 });
 }
