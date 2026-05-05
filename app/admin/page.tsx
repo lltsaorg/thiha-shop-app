@@ -1014,18 +1014,6 @@ export default function AdminPage() {
                                       : "-"}
                                   </div>
                                 </div>
-                                <div className="flex w-full gap-2 sm:w-auto">
-                                  <Button
-                                    onClick={() => setCancelTarget(request)}
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
-                                    disabled={isLoading}
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-1" />
-                                    Cancel
-                                  </Button>
-                                </div>
                               </div>
                             </CardContent>
                           </Card>
