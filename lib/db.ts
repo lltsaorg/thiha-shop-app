@@ -87,15 +87,41 @@ export async function getTotalUserBalanceFast(): Promise<number> {
   return cached<number>("users:total_balance", TOTAL_BAL_TTL, getTotalUserBalance);
 }
 
+function isFetchFailedError(error: unknown) {
+  return (
+    error instanceof TypeError &&
+    typeof error.message === 'string' &&
+    error.message.includes('fetch failed')
+  );
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function getTotalUserBalance(): Promise<number> {
-  const pageSize = 1000;
+  const pageSize = 200;
   let offset = 0;
   let total = 0;
   for (;;) {
-    const { data, error } = await supabase
-      .from("Users")
-      .select("balance")
-      .range(offset, offset + pageSize - 1);
+    let data: any[] | null = null;
+    let error: Error | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await supabase
+          .from("Users")
+          .select("balance")
+          .range(offset, offset + pageSize - 1);
+        data = result.data;
+        error = result.error;
+        break;
+      } catch (e) {
+        if (!isFetchFailedError(e) || attempt === 2) throw e;
+        await sleep(200 * (attempt + 1));
+      }
+    }
+
     if (error) throw new Error(error.message);
     const rows = data ?? [];
     for (const row of rows as any[]) total += Number(row?.balance ?? 0);

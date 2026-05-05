@@ -236,7 +236,7 @@ export async function DELETE(req: Request) {
             return json(
               {
                 success: false,
-                error: "Balance is too low. Top up first to cancel this approval.",
+                error: "Cannot cancel this top-up due to low balance.",
               },
               409
             );

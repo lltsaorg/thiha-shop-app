@@ -9,6 +9,7 @@ import {
   CreditCard,
   Package,
   BarChart3,
+  History,
   Check,
   Edit,
   Trash2,
@@ -53,6 +54,16 @@ type AdminChargeRequest = {
   currentBalance?: number;
 };
 
+type OrderHistoryEntry = {
+  order_key: string;
+  user_id: string;
+  created_at: string;
+  transaction_ids: string[];
+  phone: string;
+  product_lines: string[];
+  total_amount: number;
+};
+
 // 数字だけに正規化
 const normalizePhone = (p?: string) => (p ?? "").replace(/\D/g, "");
 
@@ -79,6 +90,8 @@ export default function AdminPage() {
   const [cancelTarget, setCancelTarget] = useState<AdminChargeRequest | null>(
     null,
   );
+  const [cancelOrderTarget, setCancelOrderTarget] =
+    useState<OrderHistoryEntry | null>(null);
 
   const totalBalanceKey =
     activeTab === "charge" ? "/api/admin/total-balance" : null;
@@ -98,13 +111,20 @@ export default function AdminPage() {
   } = useSWRImmutable("/api/products", fetcher);
 
   // チャージリクエストはページング（「Load more」方式）
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 20;
   const [crItems, setCrItems] = useState<AdminChargeRequest[]>([]);
   const [crOffset, setCrOffset] = useState(0);
   const [crHasMore, setCrHasMore] = useState(false);
   const [crLoaded, setCrLoaded] = useState(false);
   const [loadingCR, setLoadingCR] = useState(false);
   const [crDirty, setCrDirty] = useState(false);
+  const ORDER_HISTORY_PAGE_SIZE = 20;
+  const [orderItems, setOrderItems] = useState<OrderHistoryEntry[]>([]);
+  const [orderOffset, setOrderOffset] = useState(0);
+  const [orderHasMore, setOrderHasMore] = useState(false);
+  const [orderLoaded, setOrderLoaded] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
     list.map((r: any) => ({
@@ -150,6 +170,34 @@ export default function AdminPage() {
     [loadingCR, crOffset, PAGE_SIZE],
   );
 
+  const loadOrderHistory = useCallback(
+    async (opts?: { reset?: boolean }) => {
+      if (loadingOrders) return;
+      setLoadingOrders(true);
+      const nextOffset = opts?.reset ? 0 : orderOffset;
+      try {
+        const res = await apiFetch(
+          `/api/admin/order-history?limit=${ORDER_HISTORY_PAGE_SIZE}&offset=${nextOffset}`,
+          { lockUI: false, cache: "no-store" },
+        );
+        const json = await res.json().catch(() => ({}));
+        const nextItems = Array.isArray(json?.items) ? json.items : [];
+        setOrderItems((prev) =>
+          opts?.reset ? nextItems : [...prev, ...nextItems],
+        );
+        setOrderOffset(nextOffset + nextItems.length);
+        setOrderHasMore(Boolean(json?.hasMore));
+      } catch (e) {
+        console.error("Failed to load order history:", e);
+      } finally {
+        setOrderDirty(false);
+        setLoadingOrders(false);
+        setOrderLoaded(true);
+      }
+    },
+    [loadingOrders, orderOffset, ORDER_HISTORY_PAGE_SIZE],
+  );
+
   // タブが charge の時に初回ロード（StrictMode でも一度だけ）
   const didInitRef = useRef(false);
   useEffect(() => {
@@ -157,6 +205,12 @@ export default function AdminPage() {
     if (didInitRef.current) return;
     didInitRef.current = true;
     loadChargeRequests({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "orders") return;
+    loadOrderHistory({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -183,6 +237,24 @@ export default function AdminPage() {
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
   }, [activeTab, crDirty, loadChargeRequests]);
+
+  const lastOrderSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "orders") return;
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastOrderSyncRef.current < 3000) return;
+      lastOrderSyncRef.current = now;
+      loadOrderHistory({ reset: true });
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, loadOrderHistory]);
 
   // Minimal Supabase Realtime: ChargeRequests INSERT and approved UPDATE
   useEffect(() => {
@@ -242,6 +314,52 @@ export default function AdminPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, loadChargeRequests]);
+
+  useEffect(() => {
+    const sb = supabaseBrowser;
+    if (!sb) return;
+    if (activeTab !== "orders" || document.visibilityState !== "visible")
+      return;
+
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      setOrderDirty(true);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadOrderHistory({ reset: true });
+        setOrderDirty(false);
+      }, 300);
+    };
+
+    const channel = sb
+      .channel("admin-order-history")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Transactions" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "Transactions" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        sb.removeChannel(channel);
+        if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loadOrderHistory]);
 
   // Minimal Supabase Realtime: Users UPDATE/INSERT/DELETE (total balance)
   useEffect(() => {
@@ -451,6 +569,37 @@ export default function AdminPage() {
     }
   };
 
+  const handleCancelOrder = async (order: OrderHistoryEntry) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/admin/order-history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_ids: order.transaction_ids }),
+        waitMessage: "Processing, please wait...",
+        retryOn429: true,
+        max429Retries: 6,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setCancelOrderTarget(null);
+        mutate("/api/admin/total-balance");
+        await loadOrderHistory({ reset: true });
+        setNotification("Order canceled.");
+        setTimeout(() => setNotification(""), 3000);
+      } else {
+        setNotification(result?.error ?? "Cancel failed.");
+        setTimeout(() => setNotification(""), 4000);
+      }
+    } catch (error) {
+      console.error("Cancel order failed:", error);
+      setNotification("Cancel failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 編集
   const handleEditProduct = async (product: any) => {
     // 価格は文字列入力を許容しているため、送信時に検証・数値化
@@ -558,6 +707,12 @@ export default function AdminPage() {
   );
   const pendingRequests = requests.filter((req) => !req.approved);
   const processedRequests = requests.filter((req) => req.approved);
+  const cancelShortfall =
+    cancelTarget != null
+      ? Number(cancelTarget.amount ?? 0) - Number(cancelTarget.currentBalance ?? 0)
+      : 0;
+  const cannotCancelApproved =
+    cancelTarget != null && cancelShortfall > 0;
 
   // 電話番号フィルタ（数字のみで部分一致）
   const phoneQuery = normalizePhone(chargePhoneQuery);
@@ -609,7 +764,7 @@ export default function AdminPage() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Button
             variant={activeTab === "charge" ? "default" : "outline"}
             onClick={() => setActiveTab("charge")}
@@ -625,6 +780,14 @@ export default function AdminPage() {
           >
             <Package className="w-6 h-6" />
             <span>Products</span>
+          </Button>
+          <Button
+            variant={activeTab === "orders" ? "default" : "outline"}
+            onClick={() => setActiveTab("orders")}
+            className="h-16 flex flex-col gap-1"
+          >
+            <History className="w-6 h-6" />
+            <span>Order History</span>
           </Button>
           <Button
             variant={activeTab === "analytics" ? "default" : "outline"}
@@ -887,6 +1050,103 @@ export default function AdminPage() {
           </Card>
         )}
 
+        {activeTab === "orders" && (
+          <Card className="max-h-[75vh] flex flex-col overflow-hidden">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg font-black">Order History</CardTitle>
+              <div className="flex items-center gap-2">
+                {orderDirty && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary"
+                  >
+                    New
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    loadOrderHistory({ reset: true });
+                  }}
+                  disabled={loadingOrders}
+                  aria-busy={loadingOrders}
+                >
+                  <RefreshCw
+                    className={
+                      "w-4 h-4 " + (loadingOrders ? "animate-spin" : "")
+                    }
+                  />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
+              {orderItems.length === 0 && orderLoaded ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No transactions.
+                </div>
+              ) : (
+                <div
+                  className="flex-1 overflow-y-auto pr-2"
+                  style={{ scrollbarGutter: "stable both-edges" }}
+                >
+                  <div className="grid grid-cols-1 gap-4">
+                    {orderItems.map((order) => (
+                      <Card key={order.order_key} className="py-2 gap-2">
+                        <CardContent className="p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">
+                                  {order.phone}
+                                </span>
+                                <span className="text-sm text-muted-foreground font-semibold break-all">
+                                  IDs: {order.transaction_ids.join(", ")}
+                                </span>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Items: {order.product_lines.join(", ")}
+                              </div>
+                              <div className="text-sm font-semibold text-muted-foreground">
+                                Amount: {order.total_amount.toLocaleString()}ks
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {formatYGNMinute(order.created_at)}
+                              </div>
+                            </div>
+                            <div className="flex w-full gap-2 sm:w-auto">
+                              <Button
+                                onClick={() => setCancelOrderTarget(order)}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                disabled={isLoading}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {orderLoaded && orderHasMore && (
+                <div className="mt-4 flex justify-center">
+                  <Button
+                    onClick={() => loadOrderHistory()}
+                    disabled={loadingOrders}
+                  >
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <ConfirmModal
           open={!!cancelTarget}
           onOpenChange={(open) => {
@@ -896,16 +1156,56 @@ export default function AdminPage() {
           description="This will subtract the amount and delete the request."
           confirmLabel="Cancel approval"
           cancelLabel="Keep"
-          confirmDisabled={isLoading}
+          confirmDisabled={isLoading || cannotCancelApproved}
           onConfirm={() => {
             if (cancelTarget) handleCancelApproved(cancelTarget);
           }}
         >
           {cancelTarget && (
+            <>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
+                <div>Phone: {cancelTarget.phone}</div>
+                <div>ID: {cancelTarget.id}</div>
+                <div>Amount: {cancelTarget.amount.toLocaleString()}ks</div>
+                <div>
+                  Balance:{" "}
+                  {Number(cancelTarget.currentBalance ?? 0).toLocaleString()}ks
+                </div>
+              </div>
+              {cannotCancelApproved && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    Cannot cancel this top-up due to low balance.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          )}
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={!!cancelOrderTarget}
+          onOpenChange={(open) => {
+            if (!open) setCancelOrderTarget(null);
+          }}
+          title="Cancel this order?"
+          description="This will return the money and delete the transactions."
+          confirmLabel="Cancel order"
+          cancelLabel="Keep"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (cancelOrderTarget) handleCancelOrder(cancelOrderTarget);
+          }}
+        >
+          {cancelOrderTarget && (
             <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
-              <div>Phone: {cancelTarget.phone}</div>
-              <div>ID: {cancelTarget.id}</div>
-              <div>Amount: {cancelTarget.amount.toLocaleString()}ks</div>
+              <div>Transaction IDs: {cancelOrderTarget.transaction_ids.join(", ")}</div>
+              <div>Phone: {cancelOrderTarget.phone}</div>
+              <div>Items: {cancelOrderTarget.product_lines.join(", ")}</div>
+              <div>
+                Amount: {cancelOrderTarget.total_amount.toLocaleString()}ks
+              </div>
+              <div>Date: {formatYGNMinute(cancelOrderTarget.created_at)}</div>
             </div>
           )}
         </ConfirmModal>
