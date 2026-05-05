@@ -82,6 +82,7 @@ export default function AdminPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
+  const [orderPhoneQuery, setOrderPhoneQuery] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [usersDirty, setUsersDirty] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminChargeRequest | null>(
@@ -724,6 +725,11 @@ export default function AdminPage() {
   const visibleProcessedRequests = processedRequests.filter((r) =>
     matchPhone(r.phone),
   );
+  const orderPhoneFilter = normalizePhone(orderPhoneQuery);
+  const visibleOrderItems = orderItems.filter(
+    (order) =>
+      !orderPhoneFilter || normalizePhone(order.phone).includes(orderPhoneFilter),
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -1069,7 +1075,19 @@ export default function AdminPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
-              {orderItems.length === 0 && orderLoaded ? (
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Search phone... (numbers only)"
+                    inputMode="numeric"
+                    value={orderPhoneQuery}
+                    onChange={(e) => setOrderPhoneQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              {visibleOrderItems.length === 0 && orderLoaded ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No transactions.
                 </div>
@@ -1079,7 +1097,7 @@ export default function AdminPage() {
                   style={{ scrollbarGutter: "stable both-edges" }}
                 >
                   <div className="grid grid-cols-1 gap-4">
-                    {orderItems.map((order) => (
+                    {visibleOrderItems.map((order) => (
                       <Card key={order.order_key} className="py-2 gap-2">
                         <CardContent className="p-3">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
