@@ -2,7 +2,11 @@
 export const runtime = "nodejs";
 
 import { supabase, findUserIdByPhone } from "@/lib/db";
-import { USER_COOKIE, verifyUserToken } from "@/lib/user-session";
+import {
+  createExpiredUserCookieHeader,
+  getUserTokenFromCookieHeader,
+  validateUserToken,
+} from "@/lib/user-session";
 import { json } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -12,15 +16,21 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     let phone = (searchParams.get("phone") || "").trim();
-    if (!phone) {
-      // Fallback to cookie-based session
-      const cookie = (req as any).headers?.get?.("cookie") || "";
-      const token = cookie
-        .split(/;\s*/)
-        .map((p: string) => p.split("=", 2))
-        .find(([k]: string[]) => k === USER_COOKIE)?.[1];
-      const v = verifyUserToken(token ? decodeURIComponent(token) : null);
-      if (v.ok && v.phone) phone = v.phone;
+    const cookieHeader = (req as any).headers?.get?.("cookie") || "";
+    const token = getUserTokenFromCookieHeader(cookieHeader);
+    if (token) {
+      const session = await validateUserToken(token);
+      if (!session.ok) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401,
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+            "set-cookie": createExpiredUserCookieHeader(),
+          },
+        });
+      }
+      if (!phone) phone = session.phone ?? "";
     }
     if (!phone) return json({ error: "phone required" }, 401);
     const limit = Math.min(

@@ -5,7 +5,11 @@ import * as React from "react";
 import useSWR from "swr";
 import LoginRegisterGate from "@/components/ui/login-register-gate";
 import { apiFetch } from "@/lib/api";
-import { getSavedPhoneIfFresh, setSavedPhone } from "@/lib/client-auth";
+import {
+  clearSavedPhone,
+  getSavedPhoneIfFresh,
+  setSavedPhone,
+} from "@/lib/client-auth";
 
 declare global {
   interface Window {
@@ -34,6 +38,12 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
   const [authed, setAuthed] = React.useState<boolean | null>(null);
   const [phone, setPhone] = React.useState<string | null>(null);
 
+  const invalidateSession = React.useCallback(() => {
+    clearSavedPhone();
+    setAuthed(false);
+    setPhone(null);
+  }, []);
+
   // Check cookie session and capture phone; fallback to saved phone if fresh
   React.useEffect(() => {
     let cancelled = false;
@@ -58,15 +68,7 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
             try { setSavedPhone(j.phone); } catch {}
           }
         } else {
-          // Fallback only if within allowed age
-          const saved = getSavedPhoneIfFresh(getFallbackAgeSec());
-          if (saved) {
-            setAuthed(true);
-            setPhone(saved);
-          } else {
-            setAuthed(false);
-            setPhone(null);
-          }
+          invalidateSession();
         }
       } catch {
         if (!cancelled) {
@@ -83,7 +85,41 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [invalidateSession]);
+
+  React.useEffect(() => {
+    if (!authed) return;
+
+    let cancelled = false;
+    const checkSession = async () => {
+      try {
+        const r = await fetch("/api/auth/session", { cache: "no-store" });
+        if (cancelled) return;
+        if (!r.ok) {
+          invalidateSession();
+          return;
+        }
+        const j = await r.json().catch(() => ({}));
+        if (!cancelled && typeof j?.phone === "string" && j.phone) {
+          setPhone(j.phone);
+          try {
+            setSavedPhone(j.phone);
+          } catch {}
+        }
+      } catch {}
+    };
+
+    void checkSession();
+    const timer = window.setInterval(checkSession, 15000);
+    window.addEventListener("focus", checkSession);
+    document.addEventListener("visibilitychange", checkSession);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkSession);
+      document.removeEventListener("visibilitychange", checkSession);
+    };
+  }, [authed, invalidateSession]);
 
   const { data } = useSWR(
     authed && phone ? `/api/balance?phone=${encodeURIComponent(phone)}` : null,
@@ -96,6 +132,12 @@ export default function BalanceGuard({ children }: BalanceGuardProps) {
       shouldRetryOnError: false,
     }
   );
+
+  React.useEffect(() => {
+    if (authed && phone && data?.exists === false) {
+      invalidateSession();
+    }
+  }, [authed, data?.exists, invalidateSession, phone]);
 
   const handleAuthed = React.useCallback((_p: string, _b: number) => {
     // After login, recheck session and trigger SWR

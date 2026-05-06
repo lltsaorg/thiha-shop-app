@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { USER_COOKIE, USER_MAX_AGE_SEC, createUserToken, verifyUserToken } from "@/lib/user-session";
+import {
+  USER_COOKIE,
+  USER_MAX_AGE_SEC,
+  createExpiredUserCookieHeader,
+  createUserToken,
+  validateUserToken,
+} from "@/lib/user-session";
 
 export const runtime = "nodejs";
 
 // Validate current session
 export async function GET(req: NextRequest) {
   const token = req.cookies.get(USER_COOKIE)?.value || null;
-  const v = verifyUserToken(token);
+  const v = await validateUserToken(token);
   if (!v.ok) {
     return NextResponse.json(
       { ok: false },
@@ -14,6 +20,7 @@ export async function GET(req: NextRequest) {
         status: 401,
         headers: {
           "cache-control": "no-store",
+          "set-cookie": createExpiredUserCookieHeader(),
         },
       }
     );

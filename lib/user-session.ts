@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { findUserIdByPhone } from "./db";
 
 export const USER_COOKIE = "USER_SESSION";
 const USER_DEFAULT_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -44,6 +45,33 @@ export function verifyUserToken(token?: string | null): {
   } catch {
     return { ok: false };
   }
+}
+
+export async function validateUserToken(token?: string | null): Promise<{
+  ok: boolean;
+  phone?: string;
+}> {
+  const verified = verifyUserToken(token);
+  if (!verified.ok || !verified.phone) return { ok: false };
+  const userId = await findUserIdByPhone(verified.phone);
+  if (!userId) return { ok: false };
+  return { ok: true, phone: verified.phone };
+}
+
+export function getUserTokenFromCookieHeader(
+  cookieHeader?: string | null
+): string | null {
+  if (!cookieHeader) return null;
+  const token = cookieHeader
+    .split(/;\s*/)
+    .map((part) => part.split("=", 2))
+    .find(([key]) => key === USER_COOKIE)?.[1];
+  return token ? decodeURIComponent(token) : null;
+}
+
+export function createExpiredUserCookieHeader() {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${USER_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
 function sign(data: string, secret: string): string {

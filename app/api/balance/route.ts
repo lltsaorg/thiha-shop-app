@@ -1,20 +1,31 @@
 // /app/api/balance/route.ts
 import { getBalanceFast, BAL_TTL } from "@/lib/db";
-import { USER_COOKIE, verifyUserToken } from "@/lib/user-session";
+import {
+  createExpiredUserCookieHeader,
+  getUserTokenFromCookieHeader,
+  validateUserToken,
+} from "@/lib/user-session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   let phone = new URL(req.url).searchParams.get("phone")?.trim();
-  if (!phone) {
-    const cookie = (req as any).headers?.get?.("cookie") || "";
-    const token = cookie
-      .split(/;\s*/)
-      .map((p: string) => p.split("=", 2))
-      .find(([k]: string[]) => k === USER_COOKIE)?.[1];
-    const v = verifyUserToken(token ? decodeURIComponent(token) : null);
-    if (v.ok && v.phone) phone = v.phone;
+  const cookieHeader = (req as any).headers?.get?.("cookie") || "";
+  const token = getUserTokenFromCookieHeader(cookieHeader);
+  if (token) {
+    const session = await validateUserToken(token);
+    if (!session.ok) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+          "set-cookie": createExpiredUserCookieHeader(),
+        },
+      });
+    }
+    if (!phone) phone = session.phone;
   }
   if (!phone) {
     return new Response(JSON.stringify({ error: "phone required" }), {

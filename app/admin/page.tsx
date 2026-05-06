@@ -1505,7 +1505,7 @@ export default function AdminPage() {
             if (!open) setDeleteUserTarget(null);
           }}
           title="Delete this user?"
-          description="This will delete the user record."
+          description=""
           confirmLabel="Delete"
           cancelLabel="Cancel"
           confirmDisabled={isLoading}
@@ -1515,6 +1515,9 @@ export default function AdminPage() {
         >
           {deleteUserTarget && (
             <div className="space-y-3">
+              <div className="text-md font-bold leading-6 text-foreground">
+                Once deleted, this user cannot be restored.
+              </div>
               <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium leading-6 text-red-700">
                 Refund the remaining balance in cash before deleting this user.
               </div>
@@ -1532,7 +1535,7 @@ export default function AdminPage() {
 
         {/* Products tab */}
         {activeTab === "products" && (
-          <Card>
+          <Card className="max-h-[75vh] flex flex-col overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-black">Products</CardTitle>
@@ -1600,7 +1603,7 @@ export default function AdminPage() {
                 </Dialog>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
               <div className="mb-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -1613,7 +1616,10 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="max-h-96 overflow-y-auto border rounded-lg">
+              <div
+                className="flex-1 min-h-0 overflow-auto border rounded-lg"
+                style={{ scrollbarGutter: "stable both-edges" }}
+              >
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="sticky top-0 bg-background border-b">

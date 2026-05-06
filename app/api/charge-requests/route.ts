@@ -3,6 +3,11 @@ export const runtime = "nodejs";
 
 import { supabase, invalidateBalanceCache } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
+import {
+  createExpiredUserCookieHeader,
+  getUserTokenFromCookieHeader,
+  validateUserToken,
+} from "@/lib/user-session";
 import { ChargeRequestSchema } from "@/lib/validators";
 import { json, nowISO } from "@/lib/utils";
 
@@ -53,10 +58,27 @@ export async function GET(req: Request) {
 // POST: create new charge request
 export async function POST(req: Request) {
   try {
+    const cookieHeader = (req as any).headers?.get?.("cookie") || "";
+    const token = getUserTokenFromCookieHeader(cookieHeader);
+    const session = await validateUserToken(token);
+    if (!session.ok || !session.phone) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+          "set-cookie": createExpiredUserCookieHeader(),
+        },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const parsed = ChargeRequestSchema.safeParse(body);
     if (!parsed.success) return json({ error: parsed.error.format() }, 400);
     const { phone, amount } = parsed.data;
+    if (phone !== session.phone) {
+      return json({ error: "session phone mismatch" }, 403);
+    }
 
     // ユーザー解決の高速化:
     // - 新規ユーザー: insert + returning id（1往復）
