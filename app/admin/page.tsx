@@ -10,6 +10,7 @@ import {
   Package,
   BarChart3,
   History,
+  Users,
   Check,
   Edit,
   Trash2,
@@ -64,6 +65,12 @@ type OrderHistoryEntry = {
   total_amount: number;
 };
 
+type UserEntry = {
+  id: string;
+  phone_number: string;
+  balance: number;
+};
+
 // 数字だけに正規化
 const normalizePhone = (p?: string) => (p ?? "").replace(/\D/g, "");
 
@@ -83,6 +90,7 @@ export default function AdminPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
   const [orderPhoneQuery, setOrderPhoneQuery] = useState("");
+  const [userPhoneQuery, setUserPhoneQuery] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [usersDirty, setUsersDirty] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminChargeRequest | null>(
@@ -93,6 +101,9 @@ export default function AdminPage() {
   );
   const [cancelOrderTarget, setCancelOrderTarget] =
     useState<OrderHistoryEntry | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<UserEntry | null>(
+    null,
+  );
 
   const totalBalanceKey =
     activeTab === "charge" ? "/api/admin/total-balance" : null;
@@ -126,6 +137,13 @@ export default function AdminPage() {
   const [orderLoaded, setOrderLoaded] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [orderDirty, setOrderDirty] = useState(false);
+  const USER_PAGE_SIZE = 20;
+  const [userItems, setUserItems] = useState<UserEntry[]>([]);
+  const [userOffset, setUserOffset] = useState(0);
+  const [userHasMore, setUserHasMore] = useState(false);
+  const [userLoaded, setUserLoaded] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userListDirty, setUserListDirty] = useState(false);
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
     list.map((r: any) => ({
@@ -199,6 +217,34 @@ export default function AdminPage() {
     [loadingOrders, orderOffset, ORDER_HISTORY_PAGE_SIZE],
   );
 
+  const loadUsers = useCallback(
+    async (opts?: { reset?: boolean }) => {
+      if (loadingUsers) return;
+      setLoadingUsers(true);
+      const nextOffset = opts?.reset ? 0 : userOffset;
+      try {
+        const res = await apiFetch(
+          `/api/admin/users?limit=${USER_PAGE_SIZE}&offset=${nextOffset}`,
+          { lockUI: false, cache: "no-store" },
+        );
+        const json = await res.json().catch(() => ({}));
+        const nextItems = Array.isArray(json?.items) ? json.items : [];
+        setUserItems((prev) =>
+          opts?.reset ? nextItems : [...prev, ...nextItems],
+        );
+        setUserOffset(nextOffset + nextItems.length);
+        setUserHasMore(Boolean(json?.hasMore));
+      } catch (e) {
+        console.error("Failed to load users:", e);
+      } finally {
+        setUserListDirty(false);
+        setLoadingUsers(false);
+        setUserLoaded(true);
+      }
+    },
+    [loadingUsers, userOffset, USER_PAGE_SIZE],
+  );
+
   // タブが charge の時に初回ロード（StrictMode でも一度だけ）
   const didInitRef = useRef(false);
   useEffect(() => {
@@ -213,6 +259,17 @@ export default function AdminPage() {
     if (activeTab !== "orders") return;
     loadOrderHistory({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "users") return;
+    loadUsers({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "users") return;
+    setUserPhoneQuery("");
   }, [activeTab]);
 
   // フォーカス/可視化時に最新化（常に軽く再取得。無駄な再取得は軽くスロットル）
@@ -256,6 +313,24 @@ export default function AdminPage() {
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
   }, [activeTab, loadOrderHistory]);
+
+  const lastUserSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "users") return;
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastUserSyncRef.current < 3000) return;
+      lastUserSyncRef.current = now;
+      loadUsers({ reset: true });
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, loadUsers]);
 
   // Minimal Supabase Realtime: ChargeRequests INSERT and approved UPDATE
   useEffect(() => {
@@ -361,6 +436,56 @@ export default function AdminPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, loadOrderHistory]);
+
+  useEffect(() => {
+    const sb = supabaseBrowser;
+    if (!sb) return;
+    if (activeTab !== "users" || document.visibilityState !== "visible") return;
+
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      setUserListDirty(true);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadUsers({ reset: true });
+        setUserListDirty(false);
+      }, 300);
+    };
+
+    const channel = sb
+      .channel("admin-users-list")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Users" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "Users" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "Users" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        sb.removeChannel(channel);
+        if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loadUsers]);
 
   // Minimal Supabase Realtime: Users UPDATE/INSERT/DELETE (total balance)
   useEffect(() => {
@@ -601,6 +726,42 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteUser = async (user: UserEntry) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id }),
+        waitMessage: "Processing, please wait...",
+        retryOn429: true,
+        max429Retries: 6,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setDeleteUserTarget(null);
+        mutate("/api/admin/total-balance");
+        await loadUsers({ reset: true });
+        const verified = Boolean(result?.balance_verification?.verified);
+        setNotification(
+          verified
+            ? "User deleted. Total balance decrease verified."
+            : "User deleted, but total balance verification could not be confirmed.",
+        );
+        setTimeout(() => setNotification(""), 4000);
+      } else {
+        setNotification(result?.error ?? "Delete failed.");
+        setTimeout(() => setNotification(""), 4000);
+      }
+    } catch (error) {
+      console.error("Delete user failed:", error);
+      setNotification("Delete failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 編集
   const handleEditProduct = async (product: any) => {
     // 価格は文字列入力を許容しているため、送信時に検証・数値化
@@ -710,10 +871,10 @@ export default function AdminPage() {
   const processedRequests = requests.filter((req) => req.approved);
   const cancelShortfall =
     cancelTarget != null
-      ? Number(cancelTarget.amount ?? 0) - Number(cancelTarget.currentBalance ?? 0)
+      ? Number(cancelTarget.amount ?? 0) -
+        Number(cancelTarget.currentBalance ?? 0)
       : 0;
-  const cannotCancelApproved =
-    cancelTarget != null && cancelShortfall > 0;
+  const cannotCancelApproved = cancelTarget != null && cancelShortfall > 0;
 
   // 電話番号フィルタ（数字のみで部分一致）
   const phoneQuery = normalizePhone(chargePhoneQuery);
@@ -728,7 +889,14 @@ export default function AdminPage() {
   const orderPhoneFilter = normalizePhone(orderPhoneQuery);
   const visibleOrderItems = orderItems.filter(
     (order) =>
-      !orderPhoneFilter || normalizePhone(order.phone).includes(orderPhoneFilter),
+      !orderPhoneFilter ||
+      normalizePhone(order.phone).includes(orderPhoneFilter),
+  );
+  const userPhoneFilter = normalizePhone(userPhoneQuery);
+  const visibleUserItems = userItems.filter(
+    (user) =>
+      !userPhoneFilter ||
+      normalizePhone(user.phone_number).includes(userPhoneFilter),
   );
 
   return (
@@ -770,7 +938,7 @@ export default function AdminPage() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <Button
             variant={activeTab === "charge" ? "default" : "outline"}
             onClick={() => setActiveTab("charge")}
@@ -794,6 +962,14 @@ export default function AdminPage() {
           >
             <History className="w-6 h-6" />
             <span>Order History</span>
+          </Button>
+          <Button
+            variant={activeTab === "users" ? "default" : "outline"}
+            onClick={() => setActiveTab("users")}
+            className="h-16 flex flex-col gap-1"
+          >
+            <Users className="w-6 h-6" />
+            <span>User</span>
           </Button>
           <Button
             variant={activeTab === "analytics" ? "default" : "outline"}
@@ -1047,7 +1223,9 @@ export default function AdminPage() {
         {activeTab === "orders" && (
           <Card className="max-h-[75vh] flex flex-col overflow-hidden">
             <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg font-black">Order History</CardTitle>
+              <CardTitle className="text-lg font-black">
+                Order History
+              </CardTitle>
               <div className="flex items-center gap-2">
                 {orderDirty && (
                   <Badge
@@ -1120,18 +1298,20 @@ export default function AdminPage() {
                                 {formatYGNMinute(order.created_at)}
                               </div>
                             </div>
-                            <div className="flex w-full gap-2 sm:w-auto">
-                              <Button
-                                onClick={() => setCancelOrderTarget(order)}
-                                size="sm"
-                                variant="outline"
-                                className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
-                                disabled={isLoading}
-                              >
-                                <Trash2 className="w-4 h-4 mr-1" />
-                                Cancel
-                              </Button>
-                            </div>
+                            {order.phone !== "Deleted User" && (
+                              <div className="flex w-full gap-2 sm:w-auto">
+                                <Button
+                                  onClick={() => setCancelOrderTarget(order)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                  disabled={isLoading}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -1145,6 +1325,107 @@ export default function AdminPage() {
                     onClick={() => loadOrderHistory()}
                     disabled={loadingOrders}
                   >
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === "users" && (
+          <Card className="max-h-[75vh] flex flex-col overflow-hidden">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg font-black">Users</CardTitle>
+              <div className="flex items-center gap-2">
+                {userListDirty && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary"
+                  >
+                    New
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    loadUsers({ reset: true });
+                  }}
+                  disabled={loadingUsers}
+                  aria-busy={loadingUsers}
+                >
+                  <RefreshCw
+                    className={
+                      "w-4 h-4 " + (loadingUsers ? "animate-spin" : "")
+                    }
+                  />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Search phone... (numbers only)"
+                    inputMode="numeric"
+                    value={userPhoneQuery}
+                    onChange={(e) => setUserPhoneQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              {visibleUserItems.length === 0 && userLoaded ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No users.
+                </div>
+              ) : (
+                <div
+                  className="flex-1 overflow-y-auto pr-2"
+                  style={{ scrollbarGutter: "stable both-edges" }}
+                >
+                  <div className="grid grid-cols-1 gap-4">
+                    {visibleUserItems.map((user) => (
+                      <Card key={user.id} className="py-2 gap-2">
+                        <CardContent className="p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">
+                                  {user.phone_number}
+                                </span>
+                                <span className="text-sm text-muted-foreground font-semibold">
+                                  ID: {user.id}
+                                </span>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Balance:{" "}
+                                {Number(user.balance ?? 0).toLocaleString()}ks
+                              </div>
+                            </div>
+                            <div className="flex w-full gap-2 sm:w-auto">
+                              <Button
+                                onClick={() => setDeleteUserTarget(user)}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                disabled={isLoading}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {userLoaded && userHasMore && (
+                <div className="mt-4 flex justify-center">
+                  <Button onClick={() => loadUsers()} disabled={loadingUsers}>
                     Load more
                   </Button>
                 </div>
@@ -1205,13 +1486,46 @@ export default function AdminPage() {
         >
           {cancelOrderTarget && (
             <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
-              <div>Transaction IDs: {cancelOrderTarget.transaction_ids.join(", ")}</div>
+              <div>
+                Transaction IDs: {cancelOrderTarget.transaction_ids.join(", ")}
+              </div>
               <div>Phone: {cancelOrderTarget.phone}</div>
               <div>Items: {cancelOrderTarget.product_lines.join(", ")}</div>
               <div>
                 Amount: {cancelOrderTarget.total_amount.toLocaleString()}ks
               </div>
               <div>Date: {formatYGNMinute(cancelOrderTarget.created_at)}</div>
+            </div>
+          )}
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={!!deleteUserTarget}
+          onOpenChange={(open) => {
+            if (!open) setDeleteUserTarget(null);
+          }}
+          title="Delete this user?"
+          description="This will delete the user record."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (deleteUserTarget) handleDeleteUser(deleteUserTarget);
+          }}
+        >
+          {deleteUserTarget && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium leading-6 text-red-700">
+                Refund the remaining balance in cash before deleting this user.
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
+                <div>ID: {deleteUserTarget.id}</div>
+                <div>Phone: {deleteUserTarget.phone_number}</div>
+                <div>
+                  Balance:{" "}
+                  {Number(deleteUserTarget.balance ?? 0).toLocaleString()}ks
+                </div>
+              </div>
             </div>
           )}
         </ConfirmModal>

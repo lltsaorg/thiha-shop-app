@@ -57,7 +57,7 @@ function appendGroupedTransactions(
         user_id: String(row.user_id),
         created_at: createdAt,
         transaction_ids: [],
-        phone: row.Users?.phone_number ?? "-",
+        phone: row.Users?.phone_number ?? "Deleted User",
         product_lines: [],
         total_amount: 0,
       });
