@@ -1480,9 +1480,9 @@ export default function AdminPage() {
         >
           {cancelOrderTarget && (
             <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
-              <div>
+              {/* <div>
                 Transaction IDs: {cancelOrderTarget.transaction_ids.join(", ")}
-              </div>
+              </div> */}
               <div>Phone: {cancelOrderTarget.phone}</div>
               <div>Items: {cancelOrderTarget.product_lines.join(", ")}</div>
               <div>
@@ -1745,11 +1745,6 @@ export default function AdminPage() {
             if (!open) setRejectTarget(null);
           }}
           title="Reject this request?"
-          description={
-            rejectTarget
-              ? `This will reject and delete request ID ${rejectTarget.id} for ${rejectTarget.phone} / ${rejectTarget.amount.toLocaleString()}ks.`
-              : undefined
-          }
           confirmLabel="Reject"
           cancelLabel="Cancel"
           confirmDisabled={isLoading}
@@ -1757,7 +1752,14 @@ export default function AdminPage() {
             if (!rejectTarget) return;
             return handleReject(rejectTarget);
           }}
-        />
+        >
+          {rejectTarget && (
+            <div className="text-base font-bold leading-6 text-foreground">
+              This will reject and delete request for {rejectTarget.phone} /{" "}
+              {rejectTarget.amount.toLocaleString()}ks.
+            </div>
+          )}
+        </ConfirmModal>
 
         {activeTab === "analytics" && (
           <Card>
