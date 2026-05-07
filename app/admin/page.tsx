@@ -89,8 +89,12 @@ export default function AdminPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
+  const [activeChargeSearchPhone, setActiveChargeSearchPhone] = useState("");
+  const [chargeRequestTab, setChargeRequestTab] = useState("pending");
   const [orderPhoneQuery, setOrderPhoneQuery] = useState("");
+  const [activeOrderSearchPhone, setActiveOrderSearchPhone] = useState("");
   const [userPhoneQuery, setUserPhoneQuery] = useState("");
+  const [activeUserSearchPhone, setActiveUserSearchPhone] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [usersDirty, setUsersDirty] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminChargeRequest | null>(
@@ -162,23 +166,27 @@ export default function AdminPage() {
     }));
 
   const loadChargeRequests = useCallback(
-    async (opts?: { reset?: boolean }) => {
+    async (opts?: { reset?: boolean; phone?: string }) => {
       if (loadingCR) return;
       setLoadingCR(true);
+      const normalizedPhone = normalizePhone(opts?.phone);
+      const isSearch = Boolean(normalizedPhone);
       const nextOffset = opts?.reset ? 0 : crOffset;
       try {
-        const res = await apiFetch(
-          `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}`,
-          { lockUI: false, cache: "no-store" },
-        );
+        const query = isSearch
+          ? `/api/charge-requests?status=all&phone=${encodeURIComponent(normalizedPhone)}`
+          : `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}`;
+        const res = await apiFetch(query, { lockUI: false, cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         const raw = Array.isArray(json) ? json : (json?.items ?? []);
         const normalized = normalizeRequests(raw);
-        setCrItems((prev) =>
-          opts?.reset ? normalized : [...prev, ...normalized],
-        );
-        setCrOffset(nextOffset + normalized.length);
-        setCrHasMore(normalized.length >= PAGE_SIZE);
+        setCrItems((prev) => {
+          if (isSearch || opts?.reset) return normalized;
+          return [...prev, ...normalized];
+        });
+        setCrOffset(isSearch ? 0 : nextOffset + normalized.length);
+        setCrHasMore(isSearch ? false : normalized.length >= PAGE_SIZE);
+        setActiveChargeSearchPhone(normalizedPhone);
       } catch (e) {
         console.error("Failed to load charge-requests:", e);
       } finally {
@@ -189,23 +197,53 @@ export default function AdminPage() {
     [loadingCR, crOffset, PAGE_SIZE],
   );
 
+  const handleChargeSearch = useCallback(async () => {
+    const normalized = normalizePhone(chargePhoneQuery);
+    await loadChargeRequests({ reset: true, phone: normalized });
+  }, [chargePhoneQuery, loadChargeRequests]);
+
+  const handleClearChargeSearch = useCallback(async () => {
+    setChargePhoneQuery("");
+    setActiveChargeSearchPhone("");
+    await loadChargeRequests({ reset: true });
+  }, [loadChargeRequests]);
+
+  const handleChargeRequestTabChange = useCallback(
+    async (value: string) => {
+      setChargeRequestTab(value);
+      if (
+        value === "pending" &&
+        (chargePhoneQuery.trim() !== "" || activeChargeSearchPhone !== "")
+      ) {
+        setChargePhoneQuery("");
+        setActiveChargeSearchPhone("");
+        await loadChargeRequests({ reset: true });
+      }
+    },
+    [activeChargeSearchPhone, chargePhoneQuery, loadChargeRequests],
+  );
+
   const loadOrderHistory = useCallback(
-    async (opts?: { reset?: boolean }) => {
+    async (opts?: { reset?: boolean; phone?: string }) => {
       if (loadingOrders) return;
       setLoadingOrders(true);
+      const normalizedPhone = normalizePhone(opts?.phone);
+      const isSearch = Boolean(normalizedPhone);
       const nextOffset = opts?.reset ? 0 : orderOffset;
       try {
-        const res = await apiFetch(
-          `/api/admin/order-history?limit=${ORDER_HISTORY_PAGE_SIZE}&offset=${nextOffset}`,
-          { lockUI: false, cache: "no-store" },
-        );
+        const query = isSearch
+          ? `/api/admin/order-history?phone=${encodeURIComponent(normalizedPhone)}`
+          : `/api/admin/order-history?limit=${ORDER_HISTORY_PAGE_SIZE}&offset=${nextOffset}`;
+        const res = await apiFetch(query, { lockUI: false, cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         const nextItems = Array.isArray(json?.items) ? json.items : [];
-        setOrderItems((prev) =>
-          opts?.reset ? nextItems : [...prev, ...nextItems],
-        );
-        setOrderOffset(nextOffset + nextItems.length);
-        setOrderHasMore(Boolean(json?.hasMore));
+        setOrderItems((prev) => {
+          if (isSearch || opts?.reset) return nextItems;
+          return [...prev, ...nextItems];
+        });
+        setOrderOffset(isSearch ? 0 : nextOffset + nextItems.length);
+        setOrderHasMore(isSearch ? false : Boolean(json?.hasMore));
+        setActiveOrderSearchPhone(normalizedPhone);
       } catch (e) {
         console.error("Failed to load order history:", e);
       } finally {
@@ -217,23 +255,38 @@ export default function AdminPage() {
     [loadingOrders, orderOffset, ORDER_HISTORY_PAGE_SIZE],
   );
 
+  const handleOrderSearch = useCallback(async () => {
+    const normalized = normalizePhone(orderPhoneQuery);
+    await loadOrderHistory({ reset: true, phone: normalized });
+  }, [loadOrderHistory, orderPhoneQuery]);
+
+  const handleClearOrderSearch = useCallback(async () => {
+    setOrderPhoneQuery("");
+    setActiveOrderSearchPhone("");
+    await loadOrderHistory({ reset: true });
+  }, [loadOrderHistory]);
+
   const loadUsers = useCallback(
-    async (opts?: { reset?: boolean }) => {
+    async (opts?: { reset?: boolean; phone?: string }) => {
       if (loadingUsers) return;
       setLoadingUsers(true);
+      const normalizedPhone = normalizePhone(opts?.phone);
+      const isSearch = Boolean(normalizedPhone);
       const nextOffset = opts?.reset ? 0 : userOffset;
       try {
-        const res = await apiFetch(
-          `/api/admin/users?limit=${USER_PAGE_SIZE}&offset=${nextOffset}`,
-          { lockUI: false, cache: "no-store" },
-        );
+        const query = isSearch
+          ? `/api/admin/users?phone=${encodeURIComponent(normalizedPhone)}`
+          : `/api/admin/users?limit=${USER_PAGE_SIZE}&offset=${nextOffset}`;
+        const res = await apiFetch(query, { lockUI: false, cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         const nextItems = Array.isArray(json?.items) ? json.items : [];
-        setUserItems((prev) =>
-          opts?.reset ? nextItems : [...prev, ...nextItems],
-        );
-        setUserOffset(nextOffset + nextItems.length);
-        setUserHasMore(Boolean(json?.hasMore));
+        setUserItems((prev) => {
+          if (isSearch || opts?.reset) return nextItems;
+          return [...prev, ...nextItems];
+        });
+        setUserOffset(isSearch ? 0 : nextOffset + nextItems.length);
+        setUserHasMore(isSearch ? false : Boolean(json?.hasMore));
+        setActiveUserSearchPhone(normalizedPhone);
       } catch (e) {
         console.error("Failed to load users:", e);
       } finally {
@@ -244,6 +297,17 @@ export default function AdminPage() {
     },
     [loadingUsers, userOffset, USER_PAGE_SIZE],
   );
+
+  const handleUserSearch = useCallback(async () => {
+    const normalized = normalizePhone(userPhoneQuery);
+    await loadUsers({ reset: true, phone: normalized });
+  }, [loadUsers, userPhoneQuery]);
+
+  const handleClearUserSearch = useCallback(async () => {
+    setUserPhoneQuery("");
+    setActiveUserSearchPhone("");
+    await loadUsers({ reset: true });
+  }, [loadUsers]);
 
   // タブが charge に入るたびに再取得
   useEffect(() => {
@@ -265,8 +329,21 @@ export default function AdminPage() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab === "charge") return;
+    setChargePhoneQuery("");
+    setActiveChargeSearchPhone("");
+  }, [activeTab]);
+
+  useEffect(() => {
     if (activeTab === "users") return;
     setUserPhoneQuery("");
+    setActiveUserSearchPhone("");
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "orders") return;
+    setOrderPhoneQuery("");
+    setActiveOrderSearchPhone("");
   }, [activeTab]);
 
   // フォーカス/可視化時に最新化（常に軽く再取得。無駄な再取得は軽くスロットル）
@@ -276,14 +353,14 @@ export default function AdminPage() {
       if (activeTab !== "charge") return;
       if (crDirty) {
         setCrDirty(false);
-        loadChargeRequests({ reset: true });
+        loadChargeRequests({ reset: true, phone: activeChargeSearchPhone });
         return;
       }
       if (document.visibilityState !== "visible") return;
       const now = Date.now();
       if (now - lastFocusSyncRef.current < 3000) return; // 3秒スロットル
       lastFocusSyncRef.current = now;
-      loadChargeRequests({ reset: true });
+      loadChargeRequests({ reset: true, phone: activeChargeSearchPhone });
     };
     window.addEventListener("focus", maybeRefresh);
     document.addEventListener("visibilitychange", maybeRefresh);
@@ -291,7 +368,7 @@ export default function AdminPage() {
       window.removeEventListener("focus", maybeRefresh);
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
-  }, [activeTab, crDirty, loadChargeRequests]);
+  }, [activeTab, activeChargeSearchPhone, crDirty, loadChargeRequests]);
 
   const lastOrderSyncRef = useRef<number>(0);
   useEffect(() => {
@@ -301,7 +378,7 @@ export default function AdminPage() {
       const now = Date.now();
       if (now - lastOrderSyncRef.current < 3000) return;
       lastOrderSyncRef.current = now;
-      loadOrderHistory({ reset: true });
+      loadOrderHistory({ reset: true, phone: activeOrderSearchPhone });
     };
     window.addEventListener("focus", maybeRefresh);
     document.addEventListener("visibilitychange", maybeRefresh);
@@ -309,7 +386,7 @@ export default function AdminPage() {
       window.removeEventListener("focus", maybeRefresh);
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
-  }, [activeTab, loadOrderHistory]);
+  }, [activeTab, activeOrderSearchPhone, loadOrderHistory]);
 
   const lastUserSyncRef = useRef<number>(0);
   useEffect(() => {
@@ -319,7 +396,7 @@ export default function AdminPage() {
       const now = Date.now();
       if (now - lastUserSyncRef.current < 3000) return;
       lastUserSyncRef.current = now;
-      loadUsers({ reset: true });
+      loadUsers({ reset: true, phone: activeUserSearchPhone });
     };
     window.addEventListener("focus", maybeRefresh);
     document.addEventListener("visibilitychange", maybeRefresh);
@@ -327,7 +404,7 @@ export default function AdminPage() {
       window.removeEventListener("focus", maybeRefresh);
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
-  }, [activeTab, loadUsers]);
+  }, [activeTab, activeUserSearchPhone, loadUsers]);
 
   // Minimal Supabase Realtime: ChargeRequests INSERT and approved UPDATE
   useEffect(() => {
@@ -343,7 +420,7 @@ export default function AdminPage() {
       setCrDirty(true);
       if (refreshTimer != null) window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
-        loadChargeRequests({ reset: true });
+        loadChargeRequests({ reset: true, phone: activeChargeSearchPhone });
         setCrDirty(false);
       }, 300);
     };
@@ -386,7 +463,7 @@ export default function AdminPage() {
       sb.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, loadChargeRequests]);
+  }, [activeTab, activeChargeSearchPhone, loadChargeRequests]);
 
   useEffect(() => {
     const sb = supabaseBrowser;
@@ -581,7 +658,7 @@ export default function AdminPage() {
       if (activeTab !== "charge") return;
       // BroadcastChannel などで変更が検知された場合のみ再取得
       if (crDirty) {
-        loadChargeRequests({ reset: true });
+        loadChargeRequests({ reset: true, phone: activeChargeSearchPhone });
         setCrDirty(false);
       }
     };
@@ -591,7 +668,7 @@ export default function AdminPage() {
       window.removeEventListener("focus", maybeRefresh);
       document.removeEventListener("visibilitychange", maybeRefresh);
     };
-  }, [activeTab, crDirty, loadChargeRequests]);
+  }, [activeTab, activeChargeSearchPhone, crDirty, loadChargeRequests]);
 
   // products 整形
   const products: any[] = (
@@ -707,7 +784,7 @@ export default function AdminPage() {
       if (response.ok && result.success) {
         setCancelOrderTarget(null);
         mutate("/api/admin/total-balance");
-        await loadOrderHistory({ reset: true });
+        await loadOrderHistory({ reset: true, phone: activeOrderSearchPhone });
         setNotification("Order canceled.");
         setTimeout(() => setNotification(""), 3000);
       } else {
@@ -738,7 +815,7 @@ export default function AdminPage() {
       if (response.ok && result.success) {
         setDeleteUserTarget(null);
         mutate("/api/admin/total-balance");
-        await loadUsers({ reset: true });
+        await loadUsers({ reset: true, phone: activeUserSearchPhone });
         const verified = Boolean(result?.balance_verification?.verified);
         setNotification(
           verified
@@ -877,24 +954,28 @@ export default function AdminPage() {
   const phoneQuery = normalizePhone(chargePhoneQuery);
   const matchPhone = (p: string) =>
     !phoneQuery || normalizePhone(p).includes(phoneQuery);
-  const visiblePendingRequests = pendingRequests.filter((r) =>
-    matchPhone(r.phone),
-  );
-  const visibleProcessedRequests = processedRequests.filter((r) =>
-    matchPhone(r.phone),
-  );
+  const visiblePendingRequests = activeChargeSearchPhone
+    ? pendingRequests
+    : pendingRequests.filter((r) => matchPhone(r.phone));
+  const visibleProcessedRequests = activeChargeSearchPhone
+    ? processedRequests
+    : processedRequests.filter((r) => matchPhone(r.phone));
   const orderPhoneFilter = normalizePhone(orderPhoneQuery);
-  const visibleOrderItems = orderItems.filter(
-    (order) =>
-      !orderPhoneFilter ||
-      normalizePhone(order.phone).includes(orderPhoneFilter),
-  );
+  const visibleOrderItems = activeOrderSearchPhone
+    ? orderItems
+    : orderItems.filter(
+        (order) =>
+          !orderPhoneFilter ||
+          normalizePhone(order.phone).includes(orderPhoneFilter),
+      );
   const userPhoneFilter = normalizePhone(userPhoneQuery);
-  const visibleUserItems = userItems.filter(
-    (user) =>
-      !userPhoneFilter ||
-      normalizePhone(user.phone_number).includes(userPhoneFilter),
-  );
+  const visibleUserItems = activeUserSearchPhone
+    ? userItems
+    : userItems.filter(
+        (user) =>
+          !userPhoneFilter ||
+          normalizePhone(user.phone_number).includes(userPhoneFilter),
+      );
 
   return (
     <div className="min-h-screen bg-background">
@@ -1013,7 +1094,10 @@ export default function AdminPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    loadChargeRequests({ reset: true });
+                    loadChargeRequests({
+                      reset: true,
+                      phone: activeChargeSearchPhone,
+                    });
                   }}
                   disabled={loadingCR}
                   aria-busy={loadingCR}
@@ -1028,7 +1112,8 @@ export default function AdminPage() {
             {/* ヘッダーを除いた残りの高さを占有。ここでは overflow は隠す */}
             <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
               <Tabs
-                defaultValue="pending"
+                value={chargeRequestTab}
+                onValueChange={handleChargeRequestTabChange}
                 className="flex-1 flex flex-col w-full min-h-0"
               >
                 <TabsList className="grid w-full grid-cols-2">
@@ -1037,19 +1122,47 @@ export default function AdminPage() {
                   </TabsTrigger>
                   <TabsTrigger value="processed">Done</TabsTrigger>
                 </TabsList>
-                {/* 電話番号検索（両タブ共通） */}
-                <div className="mt-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                    <Input
-                      placeholder="Search phone... (numbers only)"
-                      inputMode="numeric"
-                      value={chargePhoneQuery}
-                      onChange={(e) => setChargePhoneQuery(e.target.value)}
-                      className="pl-10"
-                    />
+                {chargeRequestTab === "processed" && (
+                  <div className="mt-4">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                        <Input
+                          placeholder="Search phone... (numbers only)"
+                          inputMode="numeric"
+                          value={chargePhoneQuery}
+                          onChange={(e) => setChargePhoneQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleChargeSearch();
+                            }
+                          }}
+                          className="pl-10"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => handleChargeSearch()}
+                        disabled={loadingCR}
+                      >
+                        Search
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleClearChargeSearch()}
+                        disabled={loadingCR}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                    {activeChargeSearchPhone && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Showing all matching requests for phone:{" "}
+                        {activeChargeSearchPhone}
+                      </p>
+                    )}
                   </div>
-                </div>
+                )}
 
                 {/* 承認待ち：タブの中で “だけ” スクロール */}
                 <TabsContent
@@ -1126,16 +1239,18 @@ export default function AdminPage() {
                     </div>
                   )}
                   {/* Load more（承認待ちタブ内） */}
-                  {crLoaded && crHasMore && (
-                    <div className="mt-4 flex justify-center">
-                      <Button
-                        onClick={() => loadChargeRequests()}
-                        disabled={loadingCR}
-                      >
-                        Load more
-                      </Button>
-                    </div>
-                  )}
+                  {!activeChargeSearchPhone &&
+                    crLoaded &&
+                    crHasMore && (
+                      <div className="mt-4 flex justify-center">
+                        <Button
+                          onClick={() => loadChargeRequests()}
+                          disabled={loadingCR}
+                        >
+                          Load more
+                        </Button>
+                      </div>
+                    )}
                 </TabsContent>
 
                 {/* 処理済み：同じくタブ内スクロール */}
@@ -1201,7 +1316,7 @@ export default function AdminPage() {
                     </div>
                   )}
                   {/* Load more（処理済みタブ内） */}
-                  {crLoaded && crHasMore && (
+                  {!activeChargeSearchPhone && crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
                         onClick={() => loadChargeRequests()}
@@ -1236,7 +1351,10 @@ export default function AdminPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    loadOrderHistory({ reset: true });
+                    loadOrderHistory({
+                      reset: true,
+                      phone: activeOrderSearchPhone,
+                    });
                   }}
                   disabled={loadingOrders}
                   aria-busy={loadingOrders}
@@ -1251,16 +1369,43 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
               <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search phone... (numbers only)"
-                    inputMode="numeric"
-                    value={orderPhoneQuery}
-                    onChange={(e) => setOrderPhoneQuery(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      placeholder="Search phone... (numbers only)"
+                      inputMode="numeric"
+                      value={orderPhoneQuery}
+                      onChange={(e) => setOrderPhoneQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleOrderSearch();
+                        }
+                      }}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => handleOrderSearch()}
+                    disabled={loadingOrders}
+                  >
+                    Search
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleClearOrderSearch()}
+                    disabled={loadingOrders}
+                  >
+                    Clear
+                  </Button>
                 </div>
+                {activeOrderSearchPhone && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Showing all matching orders for phone:{" "}
+                    {activeOrderSearchPhone}
+                  </p>
+                )}
               </div>
               {visibleOrderItems.length === 0 && orderLoaded ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1316,7 +1461,7 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-              {orderLoaded && orderHasMore && (
+              {!activeOrderSearchPhone && orderLoaded && orderHasMore && (
                 <div className="mt-4 flex justify-center">
                   <Button
                     onClick={() => loadOrderHistory()}
@@ -1347,7 +1492,7 @@ export default function AdminPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    loadUsers({ reset: true });
+                    loadUsers({ reset: true, phone: activeUserSearchPhone });
                   }}
                   disabled={loadingUsers}
                   aria-busy={loadingUsers}
@@ -1362,16 +1507,43 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
               <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search phone... (numbers only)"
-                    inputMode="numeric"
-                    value={userPhoneQuery}
-                    onChange={(e) => setUserPhoneQuery(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      placeholder="Search phone... (numbers only)"
+                      inputMode="numeric"
+                      value={userPhoneQuery}
+                      onChange={(e) => setUserPhoneQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleUserSearch();
+                        }
+                      }}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => handleUserSearch()}
+                    disabled={loadingUsers}
+                  >
+                    Search
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleClearUserSearch()}
+                    disabled={loadingUsers}
+                  >
+                    Clear
+                  </Button>
                 </div>
+                {activeUserSearchPhone && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Showing all matching users for phone:{" "}
+                    {activeUserSearchPhone}
+                  </p>
+                )}
               </div>
               {visibleUserItems.length === 0 && userLoaded ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1417,7 +1589,7 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-              {userLoaded && userHasMore && (
+              {!activeUserSearchPhone && userLoaded && userHasMore && (
                 <div className="mt-4 flex justify-center">
                   <Button onClick={() => loadUsers()} disabled={loadingUsers}>
                     Load more

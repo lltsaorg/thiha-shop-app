@@ -23,11 +23,30 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
+    const phone = (searchParams.get("phone") ?? "").replace(/\D/g, "");
     const limit = Math.min(
       Math.max(Number(searchParams.get("limit") ?? 20), 1),
       20,
     );
     const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
+
+    if (phone) {
+      const { data, error } = await supabase
+        .from("Users")
+        .select("id,phone_number,balance")
+        .like("phone_number", `%${phone}%`)
+        .order("id", { ascending: false });
+
+      if (error) return json({ error: error.message }, 500);
+
+      const items = (data ?? []).map((row: any) => ({
+        id: String(row.id),
+        phone_number: row.phone_number ?? "",
+        balance: Number(row.balance ?? 0),
+      }));
+
+      return json({ items, hasMore: false });
+    }
 
     const { data, error } = await supabase
       .from("Users")

@@ -19,28 +19,31 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const status =
       (searchParams.get("status") as "pending" | "approved" | "all") || "all";
-    // Pagination (default: 50, max: 50)
+    const phone = (searchParams.get("phone") ?? "").replace(/\D/g, "");
     const limit = Math.min(
       Math.max(Number(searchParams.get("limit") ?? 50), 1),
-      50
+      50,
     );
     const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
 
     let query = supabase
       .from("ChargeRequests")
       .select(
-        "id,user_id,amount,approved,requested_at,approved_at, Users(phone_number,balance,last_charge_date)"
+        "id,user_id,amount,approved,requested_at,approved_at, Users(phone_number,balance,last_charge_date)",
       )
-      // まず requested_at の降順、次に id の降順で安定ソート
       .order("requested_at", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: false })
-      // ページネーションでメモリとペイロードを抑制
-      .range(offset, offset + limit - 1);
+      .order("id", { ascending: false });
+
+    if (!phone) {
+      query = query.range(offset, offset + limit - 1);
+    }
     if (status === "pending") query = query.eq("approved", false);
     if (status === "approved") query = query.eq("approved", true);
+
     const { data, error } = await query;
     if (error) return json({ error: error.message }, 500);
-    const items = (data ?? []).map((r: any) => {
+
+    let items = (data ?? []).map((r: any) => {
       const { Users, ...rest } = r;
       return {
         ...rest,
@@ -49,6 +52,15 @@ export async function GET(req: Request) {
         last_charge_date: Users?.last_charge_date,
       };
     });
+
+    if (phone) {
+      items = items.filter((item: any) =>
+        String(item.phone ?? "")
+          .replace(/\D/g, "")
+          .includes(phone),
+      );
+    }
+
     return json({ items });
   } catch (e: any) {
     return json({ error: e?.message ?? "Failed to list charge requests" }, 500);
@@ -80,10 +92,6 @@ export async function POST(req: Request) {
       return json({ error: "session phone mismatch" }, 403);
     }
 
-    // ユーザー解決の高速化:
-    // - 新規ユーザー: insert + returning id（1往復）
-    // - 既存ユーザー: 一意制約で失敗→phoneでid取得（2往復）
-    // 先にSELECTでid取得（既存は1往復）。無ければINSERTしてid取得。
     let userId: string | number | undefined = await (async () => {
       const { data, error } = await supabase
         .from("Users")
@@ -110,7 +118,7 @@ export async function POST(req: Request) {
         if (refErr || !refetched)
           return json(
             { error: refErr?.message ?? "failed to resolve user" },
-            500
+            500,
           );
         userId = refetched.id as any;
       }
@@ -118,7 +126,6 @@ export async function POST(req: Request) {
 
     if (userId == null)
       return json({ error: "failed to resolve user id" }, 500);
-    // 解決したユーザーに対してチャージ申請を作成
     const { data: inserted, error } = await supabase
       .from("ChargeRequests")
       .insert({
@@ -134,7 +141,7 @@ export async function POST(req: Request) {
   } catch (e: any) {
     return json(
       { error: e?.message ?? "Failed to create charge request" },
-      500
+      500,
     );
   }
 }
@@ -145,7 +152,6 @@ export async function PUT(req: Request) {
     const { id } = await req.json().catch(() => ({}));
     if (id == null)
       return json({ success: false, error: "id is required" }, 400);
-    // bigintの可能性があるため数値に変換して扱う
     const idNum = Number(id);
     if (!Number.isFinite(idNum))
       return json({ success: false, error: "invalid id" }, 400);
@@ -199,11 +205,11 @@ export async function PUT(req: Request) {
               "cache-control": "no-store",
               "x-wait-reason": "Processing, please wait...",
             },
-          }
+          },
         );
       return json(
         { success: false, error: e?.message ?? "approve failed" },
-        500
+        500,
       );
     }
   } catch (e: any) {
@@ -236,7 +242,7 @@ export async function DELETE(req: Request) {
       if (!reqData.approved)
         return json(
           { success: false, error: "only approved requests can be canceled" },
-          409
+          409,
         );
 
       const userId = reqData.user_id as string | number;
@@ -260,7 +266,7 @@ export async function DELETE(req: Request) {
                 success: false,
                 error: "Cannot cancel this top-up due to low balance.",
               },
-              409
+              409,
             );
           }
 
@@ -301,11 +307,11 @@ export async function DELETE(req: Request) {
                 "cache-control": "no-store",
                 "x-wait-reason": "Processing, please wait...",
               },
-            }
+            },
           );
         return json(
           { success: false, error: e?.message ?? "cancel failed" },
-          500
+          500,
         );
       }
     }
@@ -313,7 +319,7 @@ export async function DELETE(req: Request) {
     if (reqData.approved)
       return json(
         { success: false, error: "approved request cannot be rejected" },
-        409
+        409,
       );
 
     const { error: deleteErr } = await supabase
