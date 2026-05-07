@@ -1392,9 +1392,6 @@ export default function AdminPage() {
                                 <span className="font-semibold">
                                   {user.phone_number}
                                 </span>
-                                <span className="text-sm text-muted-foreground font-semibold">
-                                  ID: {user.id}
-                                </span>
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 Balance:{" "}
@@ -1519,7 +1516,6 @@ export default function AdminPage() {
                 Refund the remaining balance in cash before deleting this user.
               </div>
               <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
-                <div>ID: {deleteUserTarget.id}</div>
                 <div>Phone: {deleteUserTarget.phone_number}</div>
                 <div>
                   Balance:{" "}
