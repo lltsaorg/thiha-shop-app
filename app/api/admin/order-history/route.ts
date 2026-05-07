@@ -37,6 +37,10 @@ function toOrderKey(userId: string | number, createdAt: string) {
   return `${String(userId)}::${createdAt}`;
 }
 
+function normalizePhone(input?: string | null) {
+  return String(input ?? "").replace(/\D/g, "");
+}
+
 function appendGroupedTransactions(
   grouped: Map<string, OrderHistoryItem>,
   rows: TransactionRow[],
@@ -78,6 +82,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
+    const phone = normalizePhone(searchParams.get("phone"));
     const limit = Math.min(
       Math.max(Number(searchParams.get("limit") ?? 20), 1),
       20,
@@ -89,7 +94,7 @@ export async function GET(req: NextRequest) {
     let exhausted = false;
     const grouped = new Map<string, OrderHistoryItem>();
 
-    while (!exhausted && grouped.size < offset + limit + 1) {
+    while (!exhausted && (phone || grouped.size < offset + limit + 1)) {
       const { data, error } = await supabase
         .from("Transactions")
         .select(
@@ -112,6 +117,13 @@ export async function GET(req: NextRequest) {
     }
 
     const allItems = Array.from(grouped.values());
+    if (phone) {
+      const items = allItems.filter((item) =>
+        normalizePhone(item.phone).includes(phone),
+      );
+      return json({ items, hasMore: false });
+    }
+
     const items = allItems.slice(offset, offset + limit);
     const hasMore = allItems.length > offset + limit || !exhausted;
 
