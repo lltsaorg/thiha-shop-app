@@ -1,16 +1,38 @@
 // /app/api/purchase/route.ts
 import { findUserIdByPhone, supabase, invalidateBalanceCache } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
+import {
+  createExpiredUserCookieHeader,
+  getUserTokenFromCookieHeader,
+  validateUserToken,
+} from "@/lib/user-session";
 import { PurchaseSchema } from "@/lib/validators";
 import { json, nowISO } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const cookieHeader = (req as any).headers?.get?.("cookie") || "";
+  const token = getUserTokenFromCookieHeader(cookieHeader);
+  const session = await validateUserToken(token);
+  if (!session.ok || !session.phone) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "set-cookie": createExpiredUserCookieHeader(),
+      },
+    });
+  }
+
   const body = await req.json().catch(() => ({}));
   const parsed = PurchaseSchema.safeParse(body);
   if (!parsed.success) return json({ error: parsed.error.format() }, 400);
 
   const { phone, items } = parsed.data;
+  if (phone !== session.phone) {
+    return json({ error: "session phone mismatch" }, 403);
+  }
 
   // ユーザーが存在しない場合は購入を拒否
   const userId = await findUserIdByPhone(phone);

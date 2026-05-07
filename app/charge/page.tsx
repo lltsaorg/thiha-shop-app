@@ -1,14 +1,14 @@
 ﻿/* app/charge/page.tsx */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CreditCard, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { getSavedPhone, setSavedPhone } from "@/lib/client-auth";
+import { clearSavedPhone, getSavedPhone, setSavedPhone } from "@/lib/client-auth";
 // ✅ 追加：確認モーダル
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { apiFetch } from "@/lib/api";
@@ -36,6 +36,12 @@ export default function ChargePage() {
   // Synchronous re-entry guard to prevent double-submit (e.g., double-click)
   const submittingRef = useRef(false);
 
+  const invalidateSession = useCallback(() => {
+    clearSavedPhone();
+    setPhone(null);
+    window.location.replace("/");
+  }, []);
+
   // Mark that Home should refresh balance once after returning
   const markRefreshBalance = () => {
     try {
@@ -58,10 +64,39 @@ export default function ChargePage() {
             return;
           }
         }
+        if (r.status === 401) {
+          invalidateSession();
+          return;
+        }
       } catch {}
       setPhone(getSavedPhone() ?? null);
     })();
-  }, []);
+  }, [invalidateSession]);
+
+  useEffect(() => {
+    if (!phone) return;
+
+    let cancelled = false;
+    const checkSession = async () => {
+      try {
+        const r = await fetch("/api/auth/session", { cache: "no-store" });
+        if (cancelled) return;
+        if (!r.ok) {
+          invalidateSession();
+        }
+      } catch {}
+    };
+
+    const timer = window.setInterval(checkSession, 15000);
+    window.addEventListener("focus", checkSession);
+    document.addEventListener("visibilitychange", checkSession);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", checkSession);
+      document.removeEventListener("visibilitychange", checkSession);
+    };
+  }, [invalidateSession, phone]);
 
   const handleSubmit = async () => {
     if (!phone || !amount || submittingRef.current) return;

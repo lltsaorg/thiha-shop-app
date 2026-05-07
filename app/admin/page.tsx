@@ -9,6 +9,8 @@ import {
   CreditCard,
   Package,
   BarChart3,
+  History,
+  Users,
   Check,
   Edit,
   Trash2,
@@ -53,6 +55,22 @@ type AdminChargeRequest = {
   currentBalance?: number;
 };
 
+type OrderHistoryEntry = {
+  order_key: string;
+  user_id: string;
+  created_at: string;
+  transaction_ids: string[];
+  phone: string;
+  product_lines: string[];
+  total_amount: number;
+};
+
+type UserEntry = {
+  id: string;
+  phone_number: string;
+  balance: number;
+};
+
 // 数字だけに正規化
 const normalizePhone = (p?: string) => (p ?? "").replace(/\D/g, "");
 
@@ -71,8 +89,21 @@ export default function AdminPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [chargePhoneQuery, setChargePhoneQuery] = useState("");
+  const [orderPhoneQuery, setOrderPhoneQuery] = useState("");
+  const [userPhoneQuery, setUserPhoneQuery] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [usersDirty, setUsersDirty] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<AdminChargeRequest | null>(
+    null,
+  );
+  const [cancelTarget, setCancelTarget] = useState<AdminChargeRequest | null>(
+    null,
+  );
+  const [cancelOrderTarget, setCancelOrderTarget] =
+    useState<OrderHistoryEntry | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<UserEntry | null>(
+    null,
+  );
 
   const totalBalanceKey =
     activeTab === "charge" ? "/api/admin/total-balance" : null;
@@ -80,13 +111,9 @@ export default function AdminPage() {
     data: totalBalanceSnap,
     isLoading: loadingTotalBalance,
     isValidating: validatingTotalBalance,
-  } = useSWR(
-    totalBalanceKey,
-    fetcher,
-    {
-      revalidateOnFocus: true,
-    }
-  );
+  } = useSWR(totalBalanceKey, fetcher, {
+    revalidateOnFocus: true,
+  });
 
   // 商品は immutable
   const {
@@ -95,14 +122,28 @@ export default function AdminPage() {
     mutate: refetchProducts,
   } = useSWRImmutable("/api/products", fetcher);
 
-  // チャージリクエストはページング（「もっと見る」方式）
-  const PAGE_SIZE = 50;
+  // チャージリクエストはページング（「Load more」方式）
+  const PAGE_SIZE = 20;
   const [crItems, setCrItems] = useState<AdminChargeRequest[]>([]);
   const [crOffset, setCrOffset] = useState(0);
   const [crHasMore, setCrHasMore] = useState(false);
   const [crLoaded, setCrLoaded] = useState(false);
   const [loadingCR, setLoadingCR] = useState(false);
   const [crDirty, setCrDirty] = useState(false);
+  const ORDER_HISTORY_PAGE_SIZE = 20;
+  const [orderItems, setOrderItems] = useState<OrderHistoryEntry[]>([]);
+  const [orderOffset, setOrderOffset] = useState(0);
+  const [orderHasMore, setOrderHasMore] = useState(false);
+  const [orderLoaded, setOrderLoaded] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const USER_PAGE_SIZE = 20;
+  const [userItems, setUserItems] = useState<UserEntry[]>([]);
+  const [userOffset, setUserOffset] = useState(0);
+  const [userHasMore, setUserHasMore] = useState(false);
+  const [userLoaded, setUserLoaded] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userListDirty, setUserListDirty] = useState(false);
 
   const normalizeRequests = (list: any[]): AdminChargeRequest[] =>
     list.map((r: any) => ({
@@ -116,7 +157,7 @@ export default function AdminPage() {
       requested_at: r.requested_at ?? r.createdAt ?? r.created_at ?? "",
       approved_at: r.approved_at ?? r.approvedAt ?? "",
       currentBalance: Number(
-        r.currentBalance ?? r.balance ?? r.Users?.balance ?? 0
+        r.currentBalance ?? r.balance ?? r.Users?.balance ?? 0,
       ),
     }));
 
@@ -128,13 +169,13 @@ export default function AdminPage() {
       try {
         const res = await apiFetch(
           `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}`,
-          { lockUI: false, cache: "no-store" }
+          { lockUI: false, cache: "no-store" },
         );
         const json = await res.json().catch(() => ({}));
-        const raw = Array.isArray(json) ? json : json?.items ?? [];
+        const raw = Array.isArray(json) ? json : (json?.items ?? []);
         const normalized = normalizeRequests(raw);
         setCrItems((prev) =>
-          opts?.reset ? normalized : [...prev, ...normalized]
+          opts?.reset ? normalized : [...prev, ...normalized],
         );
         setCrOffset(nextOffset + normalized.length);
         setCrHasMore(normalized.length >= PAGE_SIZE);
@@ -145,17 +186,87 @@ export default function AdminPage() {
         setCrLoaded(true);
       }
     },
-    [loadingCR, crOffset, PAGE_SIZE]
+    [loadingCR, crOffset, PAGE_SIZE],
   );
 
-  // タブが charge の時に初回ロード（StrictMode でも一度だけ）
-  const didInitRef = useRef(false);
+  const loadOrderHistory = useCallback(
+    async (opts?: { reset?: boolean }) => {
+      if (loadingOrders) return;
+      setLoadingOrders(true);
+      const nextOffset = opts?.reset ? 0 : orderOffset;
+      try {
+        const res = await apiFetch(
+          `/api/admin/order-history?limit=${ORDER_HISTORY_PAGE_SIZE}&offset=${nextOffset}`,
+          { lockUI: false, cache: "no-store" },
+        );
+        const json = await res.json().catch(() => ({}));
+        const nextItems = Array.isArray(json?.items) ? json.items : [];
+        setOrderItems((prev) =>
+          opts?.reset ? nextItems : [...prev, ...nextItems],
+        );
+        setOrderOffset(nextOffset + nextItems.length);
+        setOrderHasMore(Boolean(json?.hasMore));
+      } catch (e) {
+        console.error("Failed to load order history:", e);
+      } finally {
+        setOrderDirty(false);
+        setLoadingOrders(false);
+        setOrderLoaded(true);
+      }
+    },
+    [loadingOrders, orderOffset, ORDER_HISTORY_PAGE_SIZE],
+  );
+
+  const loadUsers = useCallback(
+    async (opts?: { reset?: boolean }) => {
+      if (loadingUsers) return;
+      setLoadingUsers(true);
+      const nextOffset = opts?.reset ? 0 : userOffset;
+      try {
+        const res = await apiFetch(
+          `/api/admin/users?limit=${USER_PAGE_SIZE}&offset=${nextOffset}`,
+          { lockUI: false, cache: "no-store" },
+        );
+        const json = await res.json().catch(() => ({}));
+        const nextItems = Array.isArray(json?.items) ? json.items : [];
+        setUserItems((prev) =>
+          opts?.reset ? nextItems : [...prev, ...nextItems],
+        );
+        setUserOffset(nextOffset + nextItems.length);
+        setUserHasMore(Boolean(json?.hasMore));
+      } catch (e) {
+        console.error("Failed to load users:", e);
+      } finally {
+        setUserListDirty(false);
+        setLoadingUsers(false);
+        setUserLoaded(true);
+      }
+    },
+    [loadingUsers, userOffset, USER_PAGE_SIZE],
+  );
+
+  // タブが charge に入るたびに再取得
   useEffect(() => {
     if (activeTab !== "charge") return;
-    if (didInitRef.current) return;
-    didInitRef.current = true;
     loadChargeRequests({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "orders") return;
+    loadOrderHistory({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "users") return;
+    loadUsers({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "users") return;
+    setUserPhoneQuery("");
   }, [activeTab]);
 
   // フォーカス/可視化時に最新化（常に軽く再取得。無駄な再取得は軽くスロットル）
@@ -182,6 +293,42 @@ export default function AdminPage() {
     };
   }, [activeTab, crDirty, loadChargeRequests]);
 
+  const lastOrderSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "orders") return;
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastOrderSyncRef.current < 3000) return;
+      lastOrderSyncRef.current = now;
+      loadOrderHistory({ reset: true });
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, loadOrderHistory]);
+
+  const lastUserSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (activeTab !== "users") return;
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastUserSyncRef.current < 3000) return;
+      lastUserSyncRef.current = now;
+      loadUsers({ reset: true });
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
+  }, [activeTab, loadUsers]);
+
   // Minimal Supabase Realtime: ChargeRequests INSERT and approved UPDATE
   useEffect(() => {
     const sb = supabaseBrowser;
@@ -206,7 +353,7 @@ export default function AdminPage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "ChargeRequests" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
@@ -216,7 +363,12 @@ export default function AdminPage() {
           table: "ChargeRequests",
           filter: "approved=eq.true",
         },
-        scheduleRefresh
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "ChargeRequests" },
+        scheduleRefresh,
       )
       .subscribe();
 
@@ -235,6 +387,102 @@ export default function AdminPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, loadChargeRequests]);
+
+  useEffect(() => {
+    const sb = supabaseBrowser;
+    if (!sb) return;
+    if (activeTab !== "orders" || document.visibilityState !== "visible")
+      return;
+
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      setOrderDirty(true);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadOrderHistory({ reset: true });
+        setOrderDirty(false);
+      }, 300);
+    };
+
+    const channel = sb
+      .channel("admin-order-history")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Transactions" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "Transactions" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        sb.removeChannel(channel);
+        if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loadOrderHistory]);
+
+  useEffect(() => {
+    const sb = supabaseBrowser;
+    if (!sb) return;
+    if (activeTab !== "users" || document.visibilityState !== "visible") return;
+
+    let refreshTimer: number | null = null;
+    const scheduleRefresh = () => {
+      setUserListDirty(true);
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadUsers({ reset: true });
+        setUserListDirty(false);
+      }, 300);
+    };
+
+    const channel = sb
+      .channel("admin-users-list")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Users" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "Users" },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "Users" },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        sb.removeChannel(channel);
+        if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      sb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loadUsers]);
 
   // Minimal Supabase Realtime: Users UPDATE/INSERT/DELETE (total balance)
   useEffect(() => {
@@ -258,22 +506,22 @@ export default function AdminPage() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "Users" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Users" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "Users" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Transactions" },
-        scheduleRefresh
+        scheduleRefresh,
       )
       .subscribe();
 
@@ -347,7 +595,7 @@ export default function AdminPage() {
 
   // products 整形
   const products: any[] = (
-    Array.isArray(productsRaw) ? productsRaw : productsRaw?.items ?? []
+    Array.isArray(productsRaw) ? productsRaw : (productsRaw?.items ?? [])
   ).map((p: any) => ({
     id: p.id ?? p.uuid,
     name: p.name,
@@ -382,6 +630,129 @@ export default function AdminPage() {
     } catch (error) {
       console.error("Approval failed:", error);
       setNotification("Approve failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReject = async (req: AdminChargeRequest) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/charge-requests", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: req.id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setRejectTarget(null);
+        setNotification("Rejected the request.");
+        setTimeout(() => setNotification(""), 3000);
+      } else {
+        setNotification(result?.error ?? "Reject failed.");
+        setTimeout(() => setNotification(""), 3000);
+      }
+    } catch (error) {
+      console.error("Reject failed:", error);
+      setNotification("Reject failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelApproved = async (req: AdminChargeRequest) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/charge-requests", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: req.id, mode: "cancel-approved" }),
+        waitMessage: "Processing, please wait...",
+        retryOn429: true,
+        max429Retries: 6,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setCancelTarget(null);
+        mutate("/api/admin/total-balance");
+        setNotification("Approval canceled.");
+        setTimeout(() => setNotification(""), 3000);
+      } else {
+        setNotification(result?.error ?? "Cancel failed.");
+        setTimeout(() => setNotification(""), 4000);
+      }
+    } catch (error) {
+      console.error("Cancel approved failed:", error);
+      setNotification("Cancel failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelOrder = async (order: OrderHistoryEntry) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/admin/order-history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transaction_ids: order.transaction_ids }),
+        waitMessage: "Processing, please wait...",
+        retryOn429: true,
+        max429Retries: 6,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setCancelOrderTarget(null);
+        mutate("/api/admin/total-balance");
+        await loadOrderHistory({ reset: true });
+        setNotification("Order canceled.");
+        setTimeout(() => setNotification(""), 3000);
+      } else {
+        setNotification(result?.error ?? "Cancel failed.");
+        setTimeout(() => setNotification(""), 4000);
+      }
+    } catch (error) {
+      console.error("Cancel order failed:", error);
+      setNotification("Cancel failed.");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: UserEntry) => {
+    setIsLoading(true);
+    try {
+      const response = await apiFetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id }),
+        waitMessage: "Processing, please wait...",
+        retryOn429: true,
+        max429Retries: 6,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        setDeleteUserTarget(null);
+        mutate("/api/admin/total-balance");
+        await loadUsers({ reset: true });
+        const verified = Boolean(result?.balance_verification?.verified);
+        setNotification(
+          verified
+            ? "User deleted. Total balance decrease verified."
+            : "User deleted, but total balance verification could not be confirmed.",
+        );
+        setTimeout(() => setNotification(""), 4000);
+      } else {
+        setNotification(result?.error ?? "Delete failed.");
+        setTimeout(() => setNotification(""), 4000);
+      }
+    } catch (error) {
+      console.error("Delete user failed:", error);
+      setNotification("Delete failed.");
       setTimeout(() => setNotification(""), 3000);
     } finally {
       setIsLoading(false);
@@ -491,20 +862,38 @@ export default function AdminPage() {
   };
 
   const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
   const pendingRequests = requests.filter((req) => !req.approved);
   const processedRequests = requests.filter((req) => req.approved);
+  const cancelShortfall =
+    cancelTarget != null
+      ? Number(cancelTarget.amount ?? 0) -
+        Number(cancelTarget.currentBalance ?? 0)
+      : 0;
+  const cannotCancelApproved = cancelTarget != null && cancelShortfall > 0;
 
   // 電話番号フィルタ（数字のみで部分一致）
   const phoneQuery = normalizePhone(chargePhoneQuery);
   const matchPhone = (p: string) =>
     !phoneQuery || normalizePhone(p).includes(phoneQuery);
   const visiblePendingRequests = pendingRequests.filter((r) =>
-    matchPhone(r.phone)
+    matchPhone(r.phone),
   );
   const visibleProcessedRequests = processedRequests.filter((r) =>
-    matchPhone(r.phone)
+    matchPhone(r.phone),
+  );
+  const orderPhoneFilter = normalizePhone(orderPhoneQuery);
+  const visibleOrderItems = orderItems.filter(
+    (order) =>
+      !orderPhoneFilter ||
+      normalizePhone(order.phone).includes(orderPhoneFilter),
+  );
+  const userPhoneFilter = normalizePhone(userPhoneQuery);
+  const visibleUserItems = userItems.filter(
+    (user) =>
+      !userPhoneFilter ||
+      normalizePhone(user.phone_number).includes(userPhoneFilter),
   );
 
   return (
@@ -546,7 +935,7 @@ export default function AdminPage() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <Button
             variant={activeTab === "charge" ? "default" : "outline"}
             onClick={() => setActiveTab("charge")}
@@ -562,6 +951,22 @@ export default function AdminPage() {
           >
             <Package className="w-6 h-6" />
             <span>Products</span>
+          </Button>
+          <Button
+            variant={activeTab === "orders" ? "default" : "outline"}
+            onClick={() => setActiveTab("orders")}
+            className="h-16 flex flex-col gap-1"
+          >
+            <History className="w-6 h-6" />
+            <span>Order History</span>
+          </Button>
+          <Button
+            variant={activeTab === "users" ? "default" : "outline"}
+            onClick={() => setActiveTab("users")}
+            className="h-16 flex flex-col gap-1"
+          >
+            <Users className="w-6 h-6" />
+            <span>User</span>
           </Button>
           <Button
             variant={activeTab === "analytics" ? "default" : "outline"}
@@ -583,7 +988,7 @@ export default function AdminPage() {
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-4" />
               ) : (
                 `${Number(
-                  totalBalanceSnap?.total_balance ?? 0
+                  totalBalanceSnap?.total_balance ?? 0,
                 ).toLocaleString()}ks`
               )}
             </p>
@@ -692,15 +1097,27 @@ export default function AdminPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <Button
-                                  onClick={() => handleApprove(request)}
-                                  size="sm"
-                                  className="h-8 w-full sm:w-auto"
-                                  disabled={isLoading}
-                                >
-                                  <Check className="w-4 h-4 mr-1" />
-                                  Approve
-                                </Button>
+                                <div className="flex w-full gap-2 sm:w-auto">
+                                  <Button
+                                    onClick={() => setRejectTarget(request)}
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                    disabled={isLoading}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" />
+                                    Reject
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleApprove(request)}
+                                    size="sm"
+                                    className="h-8 flex-1 sm:flex-none"
+                                    disabled={isLoading}
+                                  >
+                                    <Check className="w-4 h-4 mr-1" />
+                                    Approve
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -708,7 +1125,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                   )}
-                  {/* もっと見る（承認待ちタブ内） */}
+                  {/* Load more（承認待ちタブ内） */}
                   {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
@@ -739,8 +1156,8 @@ export default function AdminPage() {
                         {visibleProcessedRequests.map((request) => (
                           <Card key={request.id} className="py-2 gap-2">
                             <CardContent className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="space-y-1">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="space-y-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <span className="font-semibold">
                                       {request.phone}
@@ -783,14 +1200,14 @@ export default function AdminPage() {
                       </div>
                     </div>
                   )}
-                  {/* もっと見る（処理済みタブ内） */}
+                  {/* Load more（処理済みタブ内） */}
                   {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
                         onClick={() => loadChargeRequests()}
                         disabled={loadingCR}
                       >
-                        もっと見る
+                        Load more
                       </Button>
                     </div>
                   )}
@@ -800,9 +1217,318 @@ export default function AdminPage() {
           </Card>
         )}
 
+        {activeTab === "orders" && (
+          <Card className="max-h-[75vh] flex flex-col overflow-hidden">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg font-black">
+                Order History
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {orderDirty && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary"
+                  >
+                    New
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    loadOrderHistory({ reset: true });
+                  }}
+                  disabled={loadingOrders}
+                  aria-busy={loadingOrders}
+                >
+                  <RefreshCw
+                    className={
+                      "w-4 h-4 " + (loadingOrders ? "animate-spin" : "")
+                    }
+                  />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Search phone... (numbers only)"
+                    inputMode="numeric"
+                    value={orderPhoneQuery}
+                    onChange={(e) => setOrderPhoneQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              {visibleOrderItems.length === 0 && orderLoaded ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No transactions.
+                </div>
+              ) : (
+                <div
+                  className="flex-1 overflow-y-auto pr-2"
+                  style={{ scrollbarGutter: "stable both-edges" }}
+                >
+                  <div className="grid grid-cols-1 gap-4">
+                    {visibleOrderItems.map((order) => (
+                      <Card key={order.order_key} className="py-2 gap-2">
+                        <CardContent className="p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">
+                                  {order.phone}
+                                </span>
+                                <span className="text-sm text-muted-foreground font-semibold break-all">
+                                  IDs: {order.transaction_ids.join(", ")}
+                                </span>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Items: {order.product_lines.join(", ")}
+                              </div>
+                              <div className="text-sm font-semibold text-muted-foreground">
+                                Amount: {order.total_amount.toLocaleString()}ks
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {formatYGNMinute(order.created_at)}
+                              </div>
+                            </div>
+                            {order.phone !== "Deleted User" && (
+                              <div className="flex w-full gap-2 sm:w-auto">
+                                <Button
+                                  onClick={() => setCancelOrderTarget(order)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                  disabled={isLoading}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {orderLoaded && orderHasMore && (
+                <div className="mt-4 flex justify-center">
+                  <Button
+                    onClick={() => loadOrderHistory()}
+                    disabled={loadingOrders}
+                  >
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === "users" && (
+          <Card className="max-h-[75vh] flex flex-col overflow-hidden">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg font-black">Users</CardTitle>
+              <div className="flex items-center gap-2">
+                {userListDirty && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary"
+                  >
+                    New
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    loadUsers({ reset: true });
+                  }}
+                  disabled={loadingUsers}
+                  aria-busy={loadingUsers}
+                >
+                  <RefreshCw
+                    className={
+                      "w-4 h-4 " + (loadingUsers ? "animate-spin" : "")
+                    }
+                  />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Search phone... (numbers only)"
+                    inputMode="numeric"
+                    value={userPhoneQuery}
+                    onChange={(e) => setUserPhoneQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              {visibleUserItems.length === 0 && userLoaded ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No users.
+                </div>
+              ) : (
+                <div
+                  className="flex-1 overflow-y-auto pr-2"
+                  style={{ scrollbarGutter: "stable both-edges" }}
+                >
+                  <div className="grid grid-cols-1 gap-4">
+                    {visibleUserItems.map((user) => (
+                      <Card key={user.id} className="py-2 gap-2">
+                        <CardContent className="p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">
+                                  {user.phone_number}
+                                </span>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Balance:{" "}
+                                {Number(user.balance ?? 0).toLocaleString()}ks
+                              </div>
+                            </div>
+                            <div className="flex w-full gap-2 sm:w-auto">
+                              <Button
+                                onClick={() => setDeleteUserTarget(user)}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 flex-1 sm:flex-none text-destructive hover:text-destructive"
+                                disabled={isLoading}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {userLoaded && userHasMore && (
+                <div className="mt-4 flex justify-center">
+                  <Button onClick={() => loadUsers()} disabled={loadingUsers}>
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        <ConfirmModal
+          open={!!cancelTarget}
+          onOpenChange={(open) => {
+            if (!open) setCancelTarget(null);
+          }}
+          title="Cancel approval?"
+          description="This will subtract the amount and delete the request."
+          confirmLabel="Cancel approval"
+          cancelLabel="Keep"
+          confirmDisabled={isLoading || cannotCancelApproved}
+          onConfirm={() => {
+            if (cancelTarget) handleCancelApproved(cancelTarget);
+          }}
+        >
+          {cancelTarget && (
+            <>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
+                <div>Phone: {cancelTarget.phone}</div>
+                <div>ID: {cancelTarget.id}</div>
+                <div>Amount: {cancelTarget.amount.toLocaleString()}ks</div>
+                <div>
+                  Balance:{" "}
+                  {Number(cancelTarget.currentBalance ?? 0).toLocaleString()}ks
+                </div>
+              </div>
+              {cannotCancelApproved && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    Cannot cancel this top-up due to low balance.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          )}
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={!!cancelOrderTarget}
+          onOpenChange={(open) => {
+            if (!open) setCancelOrderTarget(null);
+          }}
+          title="Cancel this order?"
+          description="This will return the money and delete the transactions."
+          confirmLabel="Cancel order"
+          cancelLabel="Keep"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (cancelOrderTarget) handleCancelOrder(cancelOrderTarget);
+          }}
+        >
+          {cancelOrderTarget && (
+            <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
+              {/* <div>
+                Transaction IDs: {cancelOrderTarget.transaction_ids.join(", ")}
+              </div> */}
+              <div>Phone: {cancelOrderTarget.phone}</div>
+              <div>Items: {cancelOrderTarget.product_lines.join(", ")}</div>
+              <div>
+                Amount: {cancelOrderTarget.total_amount.toLocaleString()}ks
+              </div>
+              <div>Date: {formatYGNMinute(cancelOrderTarget.created_at)}</div>
+            </div>
+          )}
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={!!deleteUserTarget}
+          onOpenChange={(open) => {
+            if (!open) setDeleteUserTarget(null);
+          }}
+          title="Delete this user?"
+          description=""
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (deleteUserTarget) handleDeleteUser(deleteUserTarget);
+          }}
+        >
+          {deleteUserTarget && (
+            <div className="space-y-3">
+              <div className="text-md font-bold leading-6 text-foreground">
+                Once deleted, this user cannot be restored.
+              </div>
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium leading-6 text-red-700">
+                Refund the remaining balance in cash before deleting this user.
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm leading-6">
+                <div>Phone: {deleteUserTarget.phone_number}</div>
+                <div>
+                  Balance:{" "}
+                  {Number(deleteUserTarget.balance ?? 0).toLocaleString()}ks
+                </div>
+              </div>
+            </div>
+          )}
+        </ConfirmModal>
+
         {/* Products tab */}
         {activeTab === "products" && (
-          <Card>
+          <Card className="max-h-[75vh] flex flex-col overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-black">Products</CardTitle>
@@ -870,7 +1596,7 @@ export default function AdminPage() {
                 </Dialog>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
               <div className="mb-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -883,7 +1609,10 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="max-h-96 overflow-y-auto border rounded-lg">
+              <div
+                className="flex-1 min-h-0 overflow-auto border rounded-lg"
+                style={{ scrollbarGutter: "stable both-edges" }}
+              >
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="sticky top-0 bg-background border-b">
@@ -1009,6 +1738,28 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         )}
+
+        <ConfirmModal
+          open={!!rejectTarget}
+          onOpenChange={(open) => {
+            if (!open) setRejectTarget(null);
+          }}
+          title="Reject this request?"
+          confirmLabel="Reject"
+          cancelLabel="Cancel"
+          confirmDisabled={isLoading}
+          onConfirm={() => {
+            if (!rejectTarget) return;
+            return handleReject(rejectTarget);
+          }}
+        >
+          {rejectTarget && (
+            <div className="text-base font-bold leading-6 text-foreground">
+              This will reject and delete request for {rejectTarget.phone} /{" "}
+              {rejectTarget.amount.toLocaleString()}ks.
+            </div>
+          )}
+        </ConfirmModal>
 
         {activeTab === "analytics" && (
           <Card>

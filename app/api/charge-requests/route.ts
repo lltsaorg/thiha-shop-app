@@ -3,6 +3,11 @@ export const runtime = "nodejs";
 
 import { supabase, invalidateBalanceCache } from "@/lib/db";
 import { getQueue } from "@/lib/queues";
+import {
+  createExpiredUserCookieHeader,
+  getUserTokenFromCookieHeader,
+  validateUserToken,
+} from "@/lib/user-session";
 import { ChargeRequestSchema } from "@/lib/validators";
 import { json, nowISO } from "@/lib/utils";
 
@@ -53,10 +58,27 @@ export async function GET(req: Request) {
 // POST: create new charge request
 export async function POST(req: Request) {
   try {
+    const cookieHeader = (req as any).headers?.get?.("cookie") || "";
+    const token = getUserTokenFromCookieHeader(cookieHeader);
+    const session = await validateUserToken(token);
+    if (!session.ok || !session.phone) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+          "set-cookie": createExpiredUserCookieHeader(),
+        },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const parsed = ChargeRequestSchema.safeParse(body);
     if (!parsed.success) return json({ error: parsed.error.format() }, 400);
     const { phone, amount } = parsed.data;
+    if (phone !== session.phone) {
+      return json({ error: "session phone mismatch" }, 403);
+    }
 
     // ユーザー解決の高速化:
     // - 新規ユーザー: insert + returning id（1往復）
@@ -186,6 +208,125 @@ export async function PUT(req: Request) {
     }
   } catch (e: any) {
     return json({ success: false, error: e?.message ?? "approve failed" }, 500);
+  }
+}
+
+// DELETE:
+// - reject pending charge request {id}
+// - cancel approved charge request {id, mode:"cancel-approved"}
+export async function DELETE(req: Request) {
+  try {
+    const { id, mode } = await req.json().catch(() => ({}));
+    if (id == null)
+      return json({ success: false, error: "id is required" }, 400);
+
+    const idNum = Number(id);
+    if (!Number.isFinite(idNum))
+      return json({ success: false, error: "invalid id" }, 400);
+
+    const { data: reqData, error: reqErr } = await supabase
+      .from("ChargeRequests")
+      .select("id,user_id,amount,approved")
+      .eq("id", idNum)
+      .maybeSingle();
+    if (reqErr || !reqData)
+      return json({ success: false, error: "not found" }, 404);
+
+    if (mode === "cancel-approved") {
+      if (!reqData.approved)
+        return json(
+          { success: false, error: "only approved requests can be canceled" },
+          409
+        );
+
+      const userId = reqData.user_id as string | number;
+      const amount = Number(reqData.amount ?? 0);
+      const queue = getQueue(`user:${userId}`, 1, 1000);
+
+      try {
+        const resp = await queue.add(async () => {
+          const { data: user, error: userErr } = await supabase
+            .from("Users")
+            .select("phone_number,balance")
+            .eq("id", userId)
+            .maybeSingle();
+          if (userErr || !user)
+            return json({ success: false, error: "user not found" }, 404);
+
+          const currentBalance = Number(user.balance ?? 0);
+          if (currentBalance < amount) {
+            return json(
+              {
+                success: false,
+                error: "Cannot cancel this top-up due to low balance.",
+              },
+              409
+            );
+          }
+
+          const newBalance = currentBalance - amount;
+
+          const { error: userUpdateErr } = await supabase
+            .from("Users")
+            .update({ balance: newBalance })
+            .eq("id", userId);
+          if (userUpdateErr)
+            return json({ success: false, error: userUpdateErr.message }, 500);
+
+          const { error: deleteErr } = await supabase
+            .from("ChargeRequests")
+            .delete()
+            .eq("id", idNum)
+            .eq("approved", true);
+          if (deleteErr) {
+            await supabase
+              .from("Users")
+              .update({ balance: currentBalance })
+              .eq("id", userId);
+            return json({ success: false, error: deleteErr.message }, 500);
+          }
+
+          invalidateBalanceCache(user.phone_number as string);
+          return json({ success: true, balance: newBalance }, 200);
+        });
+        return resp;
+      } catch (e: any) {
+        if (e?.code === "QUEUE_LIMIT")
+          return new Response(
+            JSON.stringify({ success: false, error: "Processing" }),
+            {
+              status: 429,
+              headers: {
+                "content-type": "application/json",
+                "cache-control": "no-store",
+                "x-wait-reason": "Processing, please wait...",
+              },
+            }
+          );
+        return json(
+          { success: false, error: e?.message ?? "cancel failed" },
+          500
+        );
+      }
+    }
+
+    if (reqData.approved)
+      return json(
+        { success: false, error: "approved request cannot be rejected" },
+        409
+      );
+
+    const { error: deleteErr } = await supabase
+      .from("ChargeRequests")
+      .delete()
+      .eq("id", idNum)
+      .eq("approved", false);
+    if (deleteErr)
+      return json({ success: false, error: deleteErr.message }, 500);
+
+    return json({ success: true }, 200);
+  } catch (e: any) {
+    return json({ success: false, error: e?.message ?? "delete failed" }, 500);
   }
 }
 

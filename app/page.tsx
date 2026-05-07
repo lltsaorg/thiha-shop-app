@@ -29,7 +29,7 @@ import {
 } from "@/components/SelectedItemsProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSavedPhone, setSavedPhone } from "@/lib/client-auth";
+import { clearSavedPhone, getSavedPhone, setSavedPhone } from "@/lib/client-auth";
 import useSWR, { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { apiFetch } from "@/lib/api";
@@ -80,8 +80,7 @@ export default function PurchasePage() {
       await fetch("/api/auth/logout", { cache: "no-store" });
     } catch {}
     try {
-      localStorage.removeItem("thiha_phone");
-      localStorage.removeItem("thiha_phone_at");
+      clearSavedPhone();
       localStorage.removeItem("phone");
     } catch {}
     window.location.reload();
@@ -116,6 +115,11 @@ export default function PurchasePage() {
             setPhone(j.phone);
             return;
           }
+        }
+        if (r.status === 401) {
+          clearSavedPhone();
+          setPhone(null);
+          return;
         }
       } catch {}
       setPhone(getSavedPhone() ?? null);
