@@ -13,7 +13,7 @@ import { json, nowISO } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-// GET: /api/charge-requests?status=pending|approved|all
+// GET: /api/charge-requests?status=pending|approved|all&phone=&limit=&offset=
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -26,42 +26,78 @@ export async function GET(req: Request) {
     );
     const offset = Math.max(Number(searchParams.get("offset") ?? 0), 0);
 
-    let query = supabase
-      .from("ChargeRequests")
-      .select(
-        "id,user_id,amount,approved,requested_at,approved_at, Users(phone_number,balance,last_charge_date)",
-      )
-      .order("requested_at", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: false });
+    const mapRows = (rows: any[]) =>
+      rows.map((r: any) => {
+        const { Users, ...rest } = r;
+        return {
+          ...rest,
+          phone: Users?.phone_number,
+          currentBalance: Users?.balance,
+          last_charge_date: Users?.last_charge_date,
+        };
+      });
 
     if (!phone) {
-      query = query.range(offset, offset + limit - 1);
+      let query = supabase
+        .from("ChargeRequests")
+        .select(
+          "id,user_id,amount,approved,requested_at,approved_at, Users(phone_number,balance,last_charge_date)",
+        )
+        .order("requested_at", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (status === "pending") query = query.eq("approved", false);
+      if (status === "approved") query = query.eq("approved", true);
+
+      const { data, error } = await query;
+      if (error) return json({ error: error.message }, 500);
+
+      const items = mapRows(data ?? []);
+      return json({ items, hasMore: items.length >= limit });
     }
-    if (status === "pending") query = query.eq("approved", false);
-    if (status === "approved") query = query.eq("approved", true);
 
-    const { data, error } = await query;
-    if (error) return json({ error: error.message }, 500);
+    const rowBatchSize = 200;
+    let rowOffset = 0;
+    let exhausted = false;
+    const filteredItems: any[] = [];
 
-    let items = (data ?? []).map((r: any) => {
-      const { Users, ...rest } = r;
-      return {
-        ...rest,
-        phone: Users?.phone_number,
-        currentBalance: Users?.balance,
-        last_charge_date: Users?.last_charge_date,
-      };
-    });
+    while (!exhausted && filteredItems.length < offset + limit + 1) {
+      let query = supabase
+        .from("ChargeRequests")
+        .select(
+          "id,user_id,amount,approved,requested_at,approved_at, Users(phone_number,balance,last_charge_date)",
+        )
+        .order("requested_at", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: false })
+        .range(rowOffset, rowOffset + rowBatchSize - 1);
 
-    if (phone) {
-      items = items.filter((item: any) =>
-        String(item.phone ?? "")
-          .replace(/\D/g, "")
-          .includes(phone),
+      if (status === "pending") query = query.eq("approved", false);
+      if (status === "approved") query = query.eq("approved", true);
+
+      const { data, error } = await query;
+      if (error) return json({ error: error.message }, 500);
+
+      const rows = mapRows(data ?? []);
+      filteredItems.push(
+        ...rows.filter((item: any) =>
+          String(item.phone ?? "")
+            .replace(/\D/g, "")
+            .includes(phone),
+        ),
       );
+
+      if (rows.length < rowBatchSize) {
+        exhausted = true;
+      } else {
+        rowOffset += rowBatchSize;
+      }
     }
 
-    return json({ items });
+    const items = filteredItems.slice(offset, offset + limit);
+    const hasMore = filteredItems.length > offset + limit || !exhausted;
+
+    return json({ items, hasMore });
   } catch (e: any) {
     return json({ error: e?.message ?? "Failed to list charge requests" }, 500);
   }

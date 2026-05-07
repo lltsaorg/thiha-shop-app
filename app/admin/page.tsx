@@ -170,22 +170,22 @@ export default function AdminPage() {
       if (loadingCR) return;
       setLoadingCR(true);
       const normalizedPhone = normalizePhone(opts?.phone);
-      const isSearch = Boolean(normalizedPhone);
       const nextOffset = opts?.reset ? 0 : crOffset;
       try {
-        const query = isSearch
-          ? `/api/charge-requests?status=all&phone=${encodeURIComponent(normalizedPhone)}`
-          : `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}`;
+        const searchParam = normalizedPhone
+          ? `&phone=${encodeURIComponent(normalizedPhone)}`
+          : "";
+        const query = `/api/charge-requests?status=all&limit=${PAGE_SIZE}&offset=${nextOffset}${searchParam}`;
         const res = await apiFetch(query, { lockUI: false, cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         const raw = Array.isArray(json) ? json : (json?.items ?? []);
         const normalized = normalizeRequests(raw);
         setCrItems((prev) => {
-          if (isSearch || opts?.reset) return normalized;
+          if (opts?.reset) return normalized;
           return [...prev, ...normalized];
         });
-        setCrOffset(isSearch ? 0 : nextOffset + normalized.length);
-        setCrHasMore(isSearch ? false : normalized.length >= PAGE_SIZE);
+        setCrOffset(nextOffset + normalized.length);
+        setCrHasMore(Boolean(json?.hasMore));
         setActiveChargeSearchPhone(normalizedPhone);
       } catch (e) {
         console.error("Failed to load charge-requests:", e);
@@ -228,21 +228,21 @@ export default function AdminPage() {
       if (loadingOrders) return;
       setLoadingOrders(true);
       const normalizedPhone = normalizePhone(opts?.phone);
-      const isSearch = Boolean(normalizedPhone);
       const nextOffset = opts?.reset ? 0 : orderOffset;
       try {
-        const query = isSearch
-          ? `/api/admin/order-history?phone=${encodeURIComponent(normalizedPhone)}`
-          : `/api/admin/order-history?limit=${ORDER_HISTORY_PAGE_SIZE}&offset=${nextOffset}`;
+        const searchParam = normalizedPhone
+          ? `&phone=${encodeURIComponent(normalizedPhone)}`
+          : "";
+        const query = `/api/admin/order-history?limit=${ORDER_HISTORY_PAGE_SIZE}&offset=${nextOffset}${searchParam}`;
         const res = await apiFetch(query, { lockUI: false, cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         const nextItems = Array.isArray(json?.items) ? json.items : [];
         setOrderItems((prev) => {
-          if (isSearch || opts?.reset) return nextItems;
+          if (opts?.reset) return nextItems;
           return [...prev, ...nextItems];
         });
-        setOrderOffset(isSearch ? 0 : nextOffset + nextItems.length);
-        setOrderHasMore(isSearch ? false : Boolean(json?.hasMore));
+        setOrderOffset(nextOffset + nextItems.length);
+        setOrderHasMore(Boolean(json?.hasMore));
         setActiveOrderSearchPhone(normalizedPhone);
       } catch (e) {
         console.error("Failed to load order history:", e);
@@ -1157,7 +1157,7 @@ export default function AdminPage() {
                     </div>
                     {activeChargeSearchPhone && (
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Showing all matching requests for phone:{" "}
+                        Showing matching requests for phone:{" "}
                         {activeChargeSearchPhone}
                       </p>
                     )}
@@ -1239,18 +1239,18 @@ export default function AdminPage() {
                     </div>
                   )}
                   {/* Load more（承認待ちタブ内） */}
-                  {!activeChargeSearchPhone &&
-                    crLoaded &&
-                    crHasMore && (
-                      <div className="mt-4 flex justify-center">
-                        <Button
-                          onClick={() => loadChargeRequests()}
-                          disabled={loadingCR}
-                        >
-                          Load more
-                        </Button>
-                      </div>
-                    )}
+                  {crLoaded && crHasMore && (
+                    <div className="mt-4 flex justify-center">
+                      <Button
+                        onClick={() =>
+                          loadChargeRequests({ phone: activeChargeSearchPhone })
+                        }
+                        disabled={loadingCR}
+                      >
+                        Load more
+                      </Button>
+                    </div>
+                  )}
                 </TabsContent>
 
                 {/* 処理済み：同じくタブ内スクロール */}
@@ -1316,10 +1316,12 @@ export default function AdminPage() {
                     </div>
                   )}
                   {/* Load more（処理済みタブ内） */}
-                  {!activeChargeSearchPhone && crLoaded && crHasMore && (
+                  {crLoaded && crHasMore && (
                     <div className="mt-4 flex justify-center">
                       <Button
-                        onClick={() => loadChargeRequests()}
+                        onClick={() =>
+                          loadChargeRequests({ phone: activeChargeSearchPhone })
+                        }
                         disabled={loadingCR}
                       >
                         Load more
@@ -1402,7 +1404,7 @@ export default function AdminPage() {
                 </div>
                 {activeOrderSearchPhone && (
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Showing all matching orders for phone:{" "}
+                    Showing matching orders for phone:{" "}
                     {activeOrderSearchPhone}
                   </p>
                 )}
@@ -1461,10 +1463,12 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-              {!activeOrderSearchPhone && orderLoaded && orderHasMore && (
+              {orderLoaded && orderHasMore && (
                 <div className="mt-4 flex justify-center">
                   <Button
-                    onClick={() => loadOrderHistory()}
+                    onClick={() =>
+                      loadOrderHistory({ phone: activeOrderSearchPhone })
+                    }
                     disabled={loadingOrders}
                   >
                     Load more
