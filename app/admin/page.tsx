@@ -245,12 +245,9 @@ export default function AdminPage() {
     [loadingUsers, userOffset, USER_PAGE_SIZE],
   );
 
-  // タブが charge の時に初回ロード（StrictMode でも一度だけ）
-  const didInitRef = useRef(false);
+  // タブが charge に入るたびに再取得
   useEffect(() => {
     if (activeTab !== "charge") return;
-    if (didInitRef.current) return;
-    didInitRef.current = true;
     loadChargeRequests({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
