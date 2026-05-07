@@ -75,6 +75,16 @@ function appendGroupedTransactions(
 
 }
 
+function countMatchingOrders(
+  grouped: Map<string, OrderHistoryItem>,
+  phone: string,
+) {
+  if (!phone) return grouped.size;
+  return Array.from(grouped.values()).filter((item) =>
+    normalizePhone(item.phone).includes(phone),
+  ).length;
+}
+
 export async function GET(req: NextRequest) {
   if (!ensureAdmin(req)) {
     return json({ error: "unauthorized" }, 401);
@@ -94,7 +104,7 @@ export async function GET(req: NextRequest) {
     let exhausted = false;
     const grouped = new Map<string, OrderHistoryItem>();
 
-    while (!exhausted && (phone || grouped.size < offset + limit + 1)) {
+    while (!exhausted && countMatchingOrders(grouped, phone) < offset + limit + 1) {
       const { data, error } = await supabase
         .from("Transactions")
         .select(
@@ -118,10 +128,12 @@ export async function GET(req: NextRequest) {
 
     const allItems = Array.from(grouped.values());
     if (phone) {
-      const items = allItems.filter((item) =>
+      const filteredItems = allItems.filter((item) =>
         normalizePhone(item.phone).includes(phone),
       );
-      return json({ items, hasMore: false });
+      const items = filteredItems.slice(offset, offset + limit);
+      const hasMore = filteredItems.length > offset + limit || !exhausted;
+      return json({ items, hasMore });
     }
 
     const items = allItems.slice(offset, offset + limit);
